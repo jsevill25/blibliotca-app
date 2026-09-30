@@ -1,0 +1,43 @@
+# Entorno virtual
+env/
+.venv/
+venv/
+
+# Base de datos local
+*.db
+*.db-journal
+*.db.backup*
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# IDE / sistema
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Scripts generadores legacy (no forman parte del runtime)
+cre2.py
+cre3.py
+cre4.py
+cre5.py
+cre6.py
+genera.py
+
+# Documentos y assets del proyecto (no código)
+*.pdf
+*.docx
+*.pptx
+*.png
+*.xls
+*.xlsx
+*.rar
+*.tar.gz
+*.zip
