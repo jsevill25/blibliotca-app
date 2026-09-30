@@ -7,7 +7,11 @@ def inicializar_base_datos(db_path="biblioteca.db"):
     Crea las tablas para el sistema con llaves foráneas y soporte para el flujo
     separado de Recepción -> Catalogación (Dewey, Sala, Estante, Origen).
     Maneja migraciones automáticas seguras si la base de datos ya existía.
+
+    NOTA: Se eliminó la carga de datos semilla para que el sistema arranque vacío
+    y el módulo de Recepción cree únicamente a partir de la entrada del usuario.
     """
+
     conexion = sqlite3.connect(db_path)
     cursor = conexion.cursor()
 
@@ -126,48 +130,7 @@ def inicializar_base_datos(db_path="biblioteca.db"):
     if "encargado_contacto" not in cols:
         cursor.execute("ALTER TABLE bibliotecas ADD COLUMN encargado_contacto TEXT DEFAULT 'No asignado';")
 
-    # --- DATOS SEMILLA ---
-    cursor.execute("SELECT COUNT(*) FROM bibliotecas")
-    if cursor.fetchone()[0] == 0:
-        cursor.executemany("""
-            INSERT INTO bibliotecas (nombre, direccion, tipo, encargado_nombre, encargado_contacto) VALUES (?, ?, ?, ?, ?)
-        """, [
-            ("Biblioteca Central Canaima", "Av. Bolívar, Caracas", "Central", "Livia Quevedo", "+58-412-1111111"),
-            ("Sede Norte - Caricuao", "Estación Caricuao, Caracas", "Dependiente", "Marcos Pérez", "+58-416-2222222"),
-            ("Sede Sur - El Valle", "Av. Intercomunal, Caracas", "Dependiente", "Elena Blanco", "+58-424-3333333")
-        ])
-
-    cursor.execute("SELECT COUNT(*) FROM usuarios")
-    if cursor.fetchone()[0] == 0:
-        cursor.executemany("""
-            INSERT INTO usuarios (username, password, rol, permisos) VALUES (?, ?, ?, ?)
-        """, [
-            ("admin", "admin123", "Administrador", "todos"),
-            ("central", "central123", "Bibliotecario Central", "catalogacion,inventario,distribucion"),
-            ("sede", "sede123", "Bibliotecario Sede", "inventario")
-        ])
-
-    cursor.execute("SELECT COUNT(*) FROM libros")
-    if cursor.fetchone()[0] == 0:
-        cursor.executemany("""
-            INSERT INTO libros (isbn, titulo, autor, editorial, anio, edicion, tema, dewey_codigo, clasificacion, idioma, origen)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, [
-            ("978-607-02-1234-5", "Don Quijote de la Mancha", "Miguel de Cervantes", "Canaima Editores", 2021, "1ra", "Ficción", "800", "800\nC325d\n2021", "Español", "Biblioteca Nacional"),
-            ("978-013-235088-4", "Clean Code", "Robert C. Martin", "Prentice Hall", 2008, "1ra", "Tecnología", "000", "000\nM210c\n2008", "Inglés", "Donación")
-        ])
-
-    cursor.execute("SELECT COUNT(*) FROM ejemplares")
-    if cursor.fetchone()[0] == 0:
-        cursor.executemany("""
-            INSERT INTO ejemplares (id_unico, isbn, estado, sala, estante, biblioteca_id)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, [
-            ("EJ-QUIJOTE-001", "978-607-02-1234-5", "en stock", "Sala General", "Estante A-1", 1),
-            ("EJ-QUIJOTE-002", "978-607-02-1234-5", "en stock", "Sala General", "Estante A-1", 1),
-            ("EJ-CLEAN-001", "978-013-235088-4", "en stock", "Sala de Tecnología", "Estante T-4", 1)
-        ])
-
     conexion.commit()
     conexion.close()
-    print("[-] Base de datos inicializada correctamente.")
+    print("[-] Base de datos inicializada correctamente (sin datos semilla).")
+

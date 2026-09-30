@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 from models.libro_model import LibroModel
 
@@ -16,17 +17,82 @@ class LibroController:
             return True, resultado[0]
         return False, "Usuario o contraseña incorrectos."
 
-    def registrar_recepcion(self, isbn, titulo, autor, editorial, anio, origen, id_ejemplar):
-        if not isbn or not titulo or not autor or not id_ejemplar or not origen:
-            return False, "Por favor complete los campos obligatorios para Recepción."
+    def registrar_recepcion(self, isbn, titulo, autor, editorial, anio, origen, cantidad):
+
+        """CRUD básico de recepción.
+
+        - Crea (cantidad) ejemplares nuevos (estado 'recibido')
+        - Si falla la escritura, revierte la transacción desde el modelo
+        """
+        faltantes = []
+        if not isbn:
+            faltantes.append("ISBN")
+        if not titulo:
+            faltantes.append("Título")
+        if not autor:
+            faltantes.append("Autor")
+        if not origen:
+            faltantes.append("Origen")
+
+        if faltantes:
+            return False, f"Por favor complete los campos obligatorios para Recepción: {', '.join(faltantes)}."
+        try:
+            cant = int(cantidad)
+        except Exception:
+            return False, "El campo 'cantidad' debe ser un número entero válido."
+        if cant <= 0:
+            return False, "La 'cantidad' debe ser mayor que cero."
+
+        print("[DEBUG] registrar_recepcion inputs:", {"isbn": isbn, "titulo": titulo, "autor": autor, "editorial": editorial, "anio": anio, "origen": origen, "cantidad": cant})
+
         exito, msg = self.model.registrar_recepcion_basica(
-            isbn, titulo, autor, editorial, int(anio) if anio.isdigit() else 2026, origen, id_ejemplar
+            isbn, titulo, autor, editorial,
+            int(anio) if str(anio).isdigit() else 2026,
+            origen, cant
         )
+
         if exito:
-            self.model.escribir_bitacora(self.usuario_activo, "RECEPCION", f"Recibió libro {titulo} (Copia: {id_ejemplar})")
+            self.model.escribir_bitacora(
+                self.usuario_activo,
+                "RECEPCION",
+                f"Recibió libro {titulo} x{cant}."
+            )
+        return exito, msg
+
+
+    def actualizar_recepcion(self, isbn, titulo, autor, editorial, anio, origen):
+        isbn = (isbn or "").strip()
+        titulo = (titulo or "").strip()
+        autor = (autor or "").strip()
+        origen = (origen or "").strip()
+
+        faltantes = []
+        if not isbn:
+            faltantes.append("ISBN")
+        if not titulo:
+            faltantes.append("Título")
+        if not autor:
+            faltantes.append("Autor")
+        if not origen:
+            faltantes.append("Origen")
+
+        if faltantes:
+            return False, f"Por favor complete los campos obligatorios para Recepción: {', '.join(faltantes)}."
+        exito, msg = self.model.actualizar_recepcion_libros(isbn, titulo, autor, editorial, int(anio) if str(anio).isdigit() else 2026, origen)
+        if exito:
+            self.model.escribir_bitacora(self.usuario_activo, "ACTUALIZAR_RECEPCION", f"Actualizó recepción de ISBN {isbn}.")
+        return exito, msg
+
+    def borrar_recepcion_ejemplares(self, isbn):
+        if not isbn:
+            return False, "ISBN requerido para borrar recepción."
+        exito, msg = self.model.borrar_recepcion_ejemplares_por_isbn(isbn)
+        if exito:
+            self.model.escribir_bitacora(self.usuario_activo, "BORRAR_RECEPCION", f"Eliminó recepción para ISBN {isbn}.")
         return exito, msg
 
     def procesar_catalogacion(self, isbn, id_ejemplar, dewey_codigo, dewey_nombre, sala, estante, edicion, tema, clasificacion, idioma):
+
         if not dewey_codigo or not sala or not estante:
             return False, "Seleccione un Código Dewey, una Sala y un Estante obligatoriamente."
         exito, msg = self.model.procesar_catalogacion_completa(

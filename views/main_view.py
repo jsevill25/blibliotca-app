@@ -11,8 +11,29 @@ class MainView(ctk.CTk):
 
         self.title("SPGB ROMULO - GALLEGOS")
         self.geometry("1280x820")
+
+        # ===================== THEME: NEGRO / BLANCO / AMARILLO =====================
+        # Se usa Light para evitar problemas visuales del modo Dark en combinaciones hardcodeadas.
         ctk.set_appearance_mode("Light")
         ctk.set_default_color_theme("blue")
+
+        # Paleta global (reemplazo progresivo de colores hardcodeados)
+        self.T_BG = "#0B0B0B"        # negro
+        self.T_PANEL = "#111111"     # panel
+        self.T_CARD = "#FFFFFF8B"      # card
+        self.T_TEXT = "#0B0B0B"      # texto
+        self.T_TEXT_INV = "#FFFFFF"  # texto invertido
+        self.T_BORDER = "#333333"    # borde
+        self.T_MUTED = "#777777"     # texto tenue
+        self.T_ACCENT = "#FFCC33"    # amarillo acento
+        self.T_ACCENT_2 = "#F7C948"  # amarillo secundario
+        self.T_PRIMARY = "#3C8DBC"   # primario
+        self.T_SUCCESS = "#00A65A"   # verde
+        self.T_WARNING = "#F39C12"   # naranja/alerta
+        self.T_DANGER = "#C23321"    # peligro
+
+
+
 
         # Catálogo Dewey para automatización rápida
         self.dewey_categorias = {
@@ -181,51 +202,331 @@ class MainView(ctk.CTk):
         self.limpiar_contenido_activo()
         self.dibujar_cabecera_modulo("1. Recepción (Entrada básica)", "Ingreso de libros por documento de origen")
 
-        form_frame = ctk.CTkFrame(self.content_frame, fg_color="white", border_width=1, border_color="#D2D6DE", corner_radius=5)
-        form_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        tabs = ctk.CTkTabview(self.content_frame)
+        tabs.pack(fill="both", expand=True)
 
-        ctk.CTkLabel(form_frame, text="DATOS GENERALES DE RECEPCIÓN (Mesa de Entrada)", font=("Helvetica", 12, "bold")).pack(pady=15)
+        tab_registrar = tabs.add("Registrar Recepción")
+        tab_modificar = tabs.add("Modificar Recepción")
+
+        # ===================== TAB: REGISTRAR =====================
+        cont_reg = ctk.CTkFrame(tab_registrar, fg_color="white", border_width=1, border_color="#D2D6DE", corner_radius=5)
+        cont_reg.pack(fill="both", expand=True, padx=10, pady=10)
+
+        ctk.CTkLabel(cont_reg, text="DATOS GENERALES DE RECEPCIÓN (Mesa de Entrada)", font=("Helvetica", 12, "bold")).pack(pady=15)
 
         campos_rec = [
             ("ISBN (Obligatorio):", "Ej. 978-X-XXXX-XXXX-X"),
             ("Título del Libro (Obligatorio):", "Título que aparece en el documento"),
             ("Autor (Obligatorio):", "Nombre del autor principal"),
-             ("cantidad (Obligatorio):", "cantidad de ejemplares"),
-               ("Editorial de Impresión:", "Nombre de la editorial"),
+            ("cantidad (Obligatorio):", "cantidad de ejemplares"),
+            ("Editorial de Impresión:", "Nombre de la editorial"),
             ("Año de Publicación:", "Ej. 2024"),
-            ("ID Único del Ejemplar (Código de barra):", "Ej. EJ-NUEVO-001")
         ]
 
         self.rec_entries = {}
         for idx, (label, place) in enumerate(campos_rec):
-            ctk.CTkLabel(form_frame, text=label, font=("Helvetica", 11, "bold")).place(x=50, y=80 + (idx * 50))
-            entry = ctk.CTkEntry(form_frame, width=320, placeholder_text=place)
-            entry.place(x=350, y=75 + (idx * 50))
+            ctk.CTkLabel(cont_reg, text=label, font=("Helvetica", 11, "bold")).place(x=50, y=110 + (idx * 50))
+            entry = ctk.CTkEntry(cont_reg, width=320, placeholder_text=place)
+            entry.place(x=350, y=105 + (idx * 50))
             self.rec_entries[label] = entry
 
-        # DROP-DOWNS AUTOMATIZADOS PARA PROCEDENCIA (Evitar tipeo libre)
-        ctk.CTkLabel(form_frame, text="Origen / Procedencia del Libro:", font=("Helvetica", 11, "bold")).place(x=50, y=80 + (len(campos_rec) * 50))
-        self.combo_origen_rec = ctk.CTkComboBox(form_frame, values=["Biblioteca Nacional", "Donación Particular", "Compra Directa", "Intercambio Institucional", "Ministerio de Educación"], width=320)
-        self.combo_origen_rec.place(x=350, y=75 + (len(campos_rec) * 50))
-
-        btn_guardar = ctk.CTkButton(form_frame, text="Registrar Entrada en Recepción (Estado: Recibido)", fg_color="#3C8DBC", hover_color="#367FA9", height=40, command=self.procesar_recepcion_libro)
-        btn_guardar.place(x=350, y=140 + (len(campos_rec) * 50))
-
-    def procesar_recepcion_libro(self):
-        exito, msg = self.controller.registrar_recepcion(
-            self.rec_entries["ISBN (Obligatorio):"].get(),
-            self.rec_entries["Título del Libro (Obligatorio):"].get(),
-            self.rec_entries["Autor (Obligatorio):"].get(),
-            self.rec_entries["Editorial de Impresión:"].get(),
-            self.rec_entries["Año de Publicación:"].get(),
-            self.combo_origen_rec.get(),
-            self.rec_entries["ID Único del Ejemplar (Código de barra):"].get()
+        ctk.CTkLabel(cont_reg, text="Origen / Procedencia del Libro:", font=("Helvetica", 11, "bold")).place(x=50, y=110 + (len(campos_rec) * 50))
+        self.combo_origen_rec = ctk.CTkComboBox(
+            cont_reg,
+            values=[
+                "Biblioteca Nacional",
+                "Donación Particular",
+                "Compra Directa",
+                "Intercambio Institucional",
+                "Ministerio de Educación",
+            ],
+            width=320,
         )
+        # Valor por defecto para que el controller no reciba origen vacío
+        self.combo_origen_rec.set("Biblioteca Nacional")
+        self.combo_origen_rec.place(x=350, y=105 + (len(campos_rec) * 50))
+
+
+        btn_guardar = ctk.CTkButton(
+            cont_reg,
+            text="Registrar Recepción (Estado: 'recibido')",
+            fg_color="#3C8DBC",
+            hover_color="#367FA9",
+            height=40,
+            command=self.procesar_recepcion_libro,
+        )
+        btn_guardar.place(x=350, y=160 + (len(campos_rec) * 50))
+
+        # ===================== TAB: MODIFICAR =====================
+        cont_mod = ctk.CTkFrame(tab_modificar, fg_color="transparent")
+        cont_mod.pack(fill="both", expand=True, padx=10, pady=10)
+
+        barra_buscar = ctk.CTkFrame(cont_mod, fg_color="white", border_width=1, border_color="#D2D6DE", corner_radius=5)
+        barra_buscar.pack(fill="x", padx=10, pady=10)
+
+        # Nota: se eliminó el buscador por ISBN para que el usuario vea siempre
+        # la lista y seleccione un registro para cargar el formulario.
+        barra_buscar.destroy()
+
+
+        self.tree_recibidos_gestion = ttk.Treeview(
+            cont_mod,
+            columns=("ISBN", "Título", "Autor", "Editorial", "Año", "Origen", "Cantidad"),
+            show="headings",
+            selectmode="browse",
+            height=8,
+        )
+        for col in ("ISBN", "Título", "Autor", "Editorial", "Año", "Origen", "Cantidad"):
+            self.tree_recibidos_gestion.heading(col, text=col)
+            self.tree_recibidos_gestion.column(col, width=110)
+        self.tree_recibidos_gestion.pack(fill="x", padx=10, pady=(0, 10))
+        self.tree_recibidos_gestion.bind("<<TreeviewSelect>>", self.cargar_recepcion_para_editar)
+
+        # Cargar lista inicialmente (evita que el tab Modificar salga vacío)
+        self.llenar_lista_recepcion()
+
+        # Si no hay recepciones registradas todavía, limpia el formulario
+        # para que no se vea “cantidad” con valores residuales.
+        if "cantidad (Obligatorio):" in self.rec_entries:
+            self.rec_entries["cantidad (Obligatorio):"].configure(state="normal")
+            self.rec_entries["cantidad (Obligatorio):"].delete(0, tk.END)
+            self.rec_entries["cantidad (Obligatorio):"].configure(state="disabled")
+
+
+
+        btns = ctk.CTkFrame(cont_mod, fg_color="transparent")
+        btns.pack(fill="x", padx=10, pady=(0, 10))
+        self.btn_eliminar_recepcion = ctk.CTkButton(
+            btns,
+            text="Eliminar Recepción (por ISBN)",
+            fg_color="#DD4B39",
+            hover_color="#C23321",
+            command=self.eliminar_recepcion,
+        )
+        self.btn_eliminar_recepcion.pack(side="left")
+
+        # formulario de edición (horizontal, usando grid)
+        form_frame = ctk.CTkFrame(cont_mod, fg_color="white", border_width=1, border_color="#D2D6DE", corner_radius=5)
+        form_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        ctk.CTkLabel(form_frame, text="EDITAR RECEPCIÓN (bibliográfico)", font=("Helvetica", 12, "bold")).grid(row=0, column=0, columnspan=4, pady=12, sticky="w", padx=25)
+
+        self.recepcion_modo_edicion = False
+        self.recepcion_isbn_edit = None
+
+        self.rec_entries = {}
+
+        # Layout en 2 columnas para evitar scroll vertical
+        # Columna 0: Etiqueta | Columna 1: Campo
+        # Columna 2: Etiqueta | Columna 3: Campo
+        campos_ui = [c for c in campos_rec]  # (label, placeholder)
+        # Excluimos cantidad porque va deshabilitado y se verá igual
+
+        max_rows = (len(campos_ui) + 1) // 2
+        for i, (label, _place) in enumerate(campos_ui):
+            row = 1 + (i % max_rows)
+            col_pair = i // max_rows
+            if col_pair == 0:
+                col_label = 0
+                col_entry = 1
+            else:
+                col_label = 2
+                col_entry = 3
+
+            ctk.CTkLabel(form_frame, text=label, font=("Helvetica", 11, "bold")).grid(
+                row=row, column=col_label, sticky="w", padx=15, pady=4
+            )
+            entry = ctk.CTkEntry(form_frame, width=260)
+            entry.grid(row=row, column=col_entry, sticky="w", padx=15, pady=4)
+            self.rec_entries[label] = entry
+
+        # Bloquear cantidad en edición
+        if "cantidad (Obligatorio):" in self.rec_entries:
+            self.rec_entries["cantidad (Obligatorio):"].configure(state="disabled")
+
+        # Origen (combo) en una fila debajo, ocupando todo el ancho
+        ctk.CTkLabel(form_frame, text="Origen / Procedencia del Libro:", font=("Helvetica", 11, "bold")).grid(
+            row=1 + max_rows, column=0, columnspan=2, sticky="w", padx=25, pady=6
+        )
+        self.combo_origen_rec = ctk.CTkComboBox(
+            form_frame,
+            values=[
+                "Biblioteca Nacional",
+                "Donación Particular",
+                "Compra Directa",
+                "Intercambio Institucional",
+                "Ministerio de Educación",
+            ],
+            width=260,
+        )
+        # Valor por defecto para que el controller no falle si no se selecciona
+        self.combo_origen_rec.set("Biblioteca Nacional")
+        self.combo_origen_rec.grid(row=1 + max_rows, column=2, columnspan=2, sticky="w", padx=15, pady=6)
+
+
+        btn_actualizar = ctk.CTkButton(
+            form_frame,
+            text="Guardar Cambios (Estado: 'recibido')",
+            fg_color="#00A65A",
+            hover_color="#008D4C",
+            height=40,
+            command=self.procesar_recepcion_libro,
+        )
+        btn_actualizar.grid(row=2 + max_rows, column=0, columnspan=4, padx=25, pady=16, sticky="ew")
+
+        # Inicializa el modo de edición y lista de registros
+        self.recepcion_modo_edicion = False
+        self.recepcion_isbn_edit = None
+        self.llenar_lista_recepcion()
+
+        # Botón buscar/bind ya fueron configurados arriba; aquí se asegura que la
+        # selección del Treeview cargue el formulario.
+        self.tree_recibidos_gestion.bind("<<TreeviewSelect>>", self.cargar_recepcion_para_editar)
+
+    # ========================== RECEPCIÓN: MODIFICAR (UTILIDADES DEL TAB) ==========================
+    def llenar_lista_recepcion(self):
+        """Carga en el Treeview las recepciones que aún están en estado 'recibido'."""
+        if not hasattr(self, "tree_recibidos_gestion"):
+            return
+
+        # Limpia árbol
+        for item in self.tree_recibidos_gestion.get_children():
+            self.tree_recibidos_gestion.delete(item)
+
+        # Trae inventario completo y filtra las entradas en estado 'recibido'
+        # Nota: en este sistema 'recibido' corresponde a la tabla ejemplares.
+        datos = self.controller.obtener_inventario_completo()
+
+        # Agrupa por ISBN para evitar repetir la misma fila bibliográfica varias veces
+        # tomando la primera ocurrencia.
+        vistos = set()
+        for ej in datos:
+            estado = ej[4]
+            isbn = ej[3]
+            if estado != "recibido" or not isbn or isbn in vistos:
+                continue
+            vistos.add(isbn)
+
+            titulo = ej[1]
+            autor = ej[2]
+            editorial = ej[11]
+            anio = ej[12]
+            origen = ej[15]
+
+            # cantidad = cantidad física por ISBN en 'recibido'
+            cant_recibidos = 0
+            for ej2 in datos:
+                if ej2[3] == isbn and ej2[4] == "recibido":
+                    cant_recibidos += 1
+
+            self.tree_recibidos_gestion.insert(
+                "",
+                "end",
+                values=(isbn, titulo, autor, editorial, anio, origen, cant_recibidos),
+            )
+
+    def buscar_recepcion(self):
+        """(Deprecado) Antes filtraba por ISBN. Ahora el módulo muestra la lista completa siempre."""
+        self.llenar_lista_recepcion()
+
+
+    def cargar_recepcion_para_editar(self, evento):
+        """Al seleccionar una fila del Treeview, rellena el formulario de edición."""
+        seleccion = self.tree_recibidos_gestion.selection()
+        if not seleccion:
+            return
+
+        item = self.tree_recibidos_gestion.item(seleccion[0])
+        valores = item["values"]
+        if not valores:
+            return
+
+        isbn, titulo, autor, editorial, anio, origen, _cantidad = valores
+
+        # Setear modo de edición
+        self.recepcion_modo_edicion = True
+        self.recepcion_isbn_edit = isbn
+
+        # Cargar campos
+        self.rec_entries["ISBN (Obligatorio):"].delete(0, tk.END)
+        self.rec_entries["ISBN (Obligatorio):"].insert(0, isbn)
+
+        self.rec_entries["Título del Libro (Obligatorio):"].delete(0, tk.END)
+        self.rec_entries["Título del Libro (Obligatorio):"].insert(0, titulo or "")
+
+        self.rec_entries["Autor (Obligatorio):"].delete(0, tk.END)
+        self.rec_entries["Autor (Obligatorio):"].insert(0, autor or "")
+
+        self.rec_entries["Editorial de Impresión:"].delete(0, tk.END)
+        self.rec_entries["Editorial de Impresión:"].insert(0, editorial or "")
+
+        self.rec_entries["Año de Publicación:"].delete(0, tk.END)
+        self.rec_entries["Año de Publicación:"].insert(0, str(anio) if anio is not None else "")
+
+        # combo origen
+        try:
+            vals = self.combo_origen_rec.cget('values')
+            if origen and str(origen).strip() and (not vals or origen in vals):
+                self.combo_origen_rec.set(origen)
+            else:
+                if vals:
+                    self.combo_origen_rec.set(vals[0])
+        except Exception:
+            pass
+
+    def eliminar_recepcion(self):
+        """Elimina recepción por ISBN (solo si está en estado 'recibido')."""
+        seleccion = self.tree_recibidos_gestion.selection()
+        if not seleccion:
+            messagebox.showwarning("Aviso", "Seleccione un registro de recepción para eliminar.")
+            return
+
+        item = self.tree_recibidos_gestion.item(seleccion[0])
+        valores = item["values"]
+        if not valores:
+            return
+        isbn = valores[0]
+
+        if not messagebox.askyesno("Confirmar", f"¿Eliminar recepción (estado 'recibido') para ISBN: {isbn}?"):
+            return
+
+        exito, msg = self.controller.borrar_recepcion_ejemplares(isbn)
         if exito:
-            messagebox.showinfo("Recepción Guardada", msg)
-            self.vista_catalogacion()
+            messagebox.showinfo("Eliminado", msg)
+            self.recepcion_modo_edicion = False
+            self.recepcion_isbn_edit = None
+            self.llenar_lista_recepcion()
         else:
             messagebox.showerror("Error", msg)
+
+    def procesar_recepcion_libro(self):
+
+        isbn = self.rec_entries["ISBN (Obligatorio):"].get().strip()
+        titulo = self.rec_entries["Título del Libro (Obligatorio):"].get().strip()
+        autor = self.rec_entries["Autor (Obligatorio):"].get().strip()
+        editorial = self.rec_entries["Editorial de Impresión:"].get().strip()
+        anio = self.rec_entries["Año de Publicación:"].get().strip()
+        origen = self.combo_origen_rec.get().strip()
+        cantidad = self.rec_entries["cantidad (Obligatorio):"].get().strip()
+
+        if self.recepcion_modo_edicion and self.recepcion_isbn_edit:
+            # Update bibliográfico (por ISBN). Mantiene cantidad física.
+            isbn_update = self.recepcion_isbn_edit
+            exito, msg = self.controller.actualizar_recepcion(
+                isbn_update, titulo, autor, editorial, anio, origen
+            )
+        else:
+            exito, msg = self.controller.registrar_recepcion(isbn, titulo, autor, editorial, anio, origen, cantidad)
+
+        if exito:
+            messagebox.showinfo("Recepción Guardada", msg)
+            self.recepcion_modo_edicion = False
+            self.recepcion_isbn_edit = None
+            # habilitar ISBN y recargar lista
+            self.rec_entries["ISBN (Obligatorio):"].configure(state="normal")
+            self.llenar_lista_recepcion()
+        else:
+            messagebox.showerror("Error", msg)
+
 
     # ========================== VISTA: CATALOGACIÓN (DEWEY SELECTS AUTOMATED) ==========================
     def vista_catalogacion(self):

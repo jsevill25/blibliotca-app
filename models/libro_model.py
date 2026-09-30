@@ -8,27 +8,82 @@ class LibroModel:
     def __init__(self, db_path="biblioteca.db"):
         self.db_path = db_path
 
-    def registrar_recepcion_basica(self, isbn, titulo, autor, editorial, anio, origen, id_ejemplar):
+    def registrar_recepcion_basica(self, isbn, titulo, autor, editorial, anio, origen, cantidad):
+        """Inserta/actualiza recepción creando 'cantidad' ejemplares.
+
+        - Si hay cualquier error de escritura: hace rollback.
+        - Ya no se usa campo 'código de barra' desde la UI.
+        """
         conexion = sqlite3.connect(self.db_path)
         cursor = conexion.cursor()
+        cursor.execute("PRAGMA foreign_keys = ON;")
+
         try:
+            # Asegura existencia del libro
             cursor.execute("""
                 INSERT OR IGNORE INTO libros (isbn, titulo, autor, editorial, anio, origen, dewey_codigo, clasificacion)
                 VALUES (?, ?, ?, ?, ?, ?, '', '')
             """, (isbn, titulo, autor, editorial, anio, origen))
 
-            cursor.execute("""
-                INSERT INTO ejemplares (id_unico, isbn, estado, sala, estante, biblioteca_id)
-                VALUES (?, ?, 'recibido', 'Área de Recepción', 'Mesa de Entrada', 1)
-            """, (id_ejemplar, isbn))
+            # Genera ids únicos para cada ejemplar recibido.
+            # Patrón: EJ-<isbn-sin-guiones>-<timestamp>-<n>
+            # Usamos timestamp para evitar duplicados al reintentar el alta.
+            import time
+            base_isbn = isbn.replace("-", "")
+            ts = int(time.time() * 1000)
+
+            nuevos_ids = []
+            for n in range(1, cantidad + 1):
+                nuevos_ids.append(f"EJ-{base_isbn}-{ts}-{n:03d}")
+
+            # Buscar una biblioteca existente para asignar biblioteca_id.
+            cursor.execute("SELECT id FROM bibliotecas ORDER BY id ASC LIMIT 1")
+            fila = cursor.fetchone()
+            if not fila:
+                return False, "No existen bibliotecas registradas. Registre al menos una sede antes de recibir libros."
+            biblioteca_id = fila[0]
+
+            for id_unico in nuevos_ids:
+                cursor.execute("""
+                    INSERT INTO ejemplares (id_unico, isbn, estado, sala, estante, biblioteca_id)
+                    VALUES (?, ?, 'recibido', 'Área de Recepción', 'Mesa de Entrada', ?)
+                """, (id_unico, isbn, biblioteca_id))
+
+
+            # Garantía de consistencia: si por cualquier razón el alta no dejó
+            # el estado en 'recibido' (por migración/flujo), se corrige aquí.
+            cursor.execute(
+                """
+                UPDATE ejemplares
+                SET estado = 'recibido', sala = 'Área de Recepción', estante = 'Mesa de Entrada', biblioteca_id = 1
+                WHERE isbn = ? AND id_unico IN ({})
+                """.format(",".join(["?" for _ in nuevos_ids])),
+                tuple([isbn] + nuevos_ids)
+            )
+
+
+            # Debug/consistencia: asegurar que el alta quedó en 'recibido'
+            # (en ambientes anteriores existía confusión entre estados por flujos de catálogo/distribución). 
+            cursor.execute("""SELECT COUNT(*) FROM ejemplares WHERE isbn = ? AND estado = 'recibido'""", (isbn,))
+            _ = cursor.fetchone()
+
+            # IMPORTANTE:
+            # La recepción debe quedar en estado 'recibido' para que el módulo de
+            # catalogación/listado de pendientes lo tome correctamente.
+            # (No se debe mover a 'en stock' desde el alta.)
+
 
             conexion.commit()
-            return True, f"Libro recibido exitosamente con ID Ejemplar '{id_ejemplar}'."
-        except sqlite3.IntegrityError:
+            return True, f"Recepción registrada: {titulo} (cantidad: {cantidad})."
+        except sqlite3.IntegrityError as e:
             conexion.rollback()
-            return False, f"Error: El ID único '{id_ejemplar}' ya está registrado."
+            return False, f"Error al registrar recepción (posible duplicado): {str(e)}"
+        except Exception as e:
+            conexion.rollback()
+            return False, f"Error al registrar recepción: {str(e)}"
         finally:
             conexion.close()
+
 
     def calcular_cutter_sanborn(self, autor, titulo):
         """
@@ -222,8 +277,42 @@ class LibroModel:
         return datos
 
     # --- LISTADO E INVENTARIOS ---
+    def actualizar_recepcion_libros(self, isbn, titulo, autor, editorial, anio, origen):
+        conexion = sqlite3.connect(self.db_path)
+        cursor = conexion.cursor()
+        try:
+            cursor.execute("""
+                UPDATE libros
+                SET titulo=?, autor=?, editorial=?, anio=?, origen=?
+                WHERE isbn=?
+            """, (titulo, autor, editorial, anio, origen, isbn))
+            if cursor.rowcount == 0:
+                conexion.rollback()
+                return False, "No existe recepción para ese ISBN."
+            conexion.commit()
+            return True, "Recepción actualizada para el ISBN indicado."
+        except Exception as e:
+            conexion.rollback()
+            return False, str(e)
+        finally:
+            conexion.close()
+
+    def borrar_recepcion_ejemplares_por_isbn(self, isbn):
+        conexion = sqlite3.connect(self.db_path)
+        cursor = conexion.cursor()
+        try:
+            cursor.execute("DELETE FROM ejemplares WHERE isbn=? AND estado='recibido'", (isbn,))
+            conexion.commit()
+            return True, f"Recepción eliminada (ejemplares recibidos) para ISBN {isbn}."
+        except Exception as e:
+            conexion.rollback()
+            return False, str(e)
+        finally:
+            conexion.close()
+
     def obtener_todos_ejemplares(self):
         conexion = sqlite3.connect(self.db_path)
+
         cursor = conexion.cursor()
         cursor.execute("""
             SELECT e.id_unico, l.titulo, l.autor, l.isbn, e.estado, e.sala, e.estante, b.nombre, l.clasificacion, l.dewey_codigo, l.tema, l.editorial, l.anio, l.edicion, l.idioma, l.origen, b.id
