@@ -1,6 +1,7 @@
 
 # -*- coding: utf-8 -*-
 from models.libro_model import LibroModel
+from pathlib import Path
 
 class LibroController:
     def __init__(self):
@@ -191,6 +192,10 @@ class LibroController:
 
     def realizar_copia_seguridad(self, ruta_destino):
         return self.model.realizar_backup(ruta_destino)
+
+    def realizar_backup_automatico(self):
+        carpeta_backups = Path(self.model.db_path).resolve().parent / "data" / "backups"
+        return self.model.realizar_backup_automatico(carpeta_backups)
 
     def exportar_todo_a_csv_excel(self, carpeta_destino):
         return self.model.exportar_todo_a_csv(carpeta_destino)

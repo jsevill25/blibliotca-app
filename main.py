@@ -1,18 +1,30 @@
 # -*- coding: utf-8 -*-
-from models.database import inicializar_base_datos
-from controllers.libro_controller import LibroController
-from views.main_view import MainView
+import sys
 
-def main():
-    # 1. Asegurar persistencia y tablas con soporte a migración
-    inicializar_base_datos()
+from PySide6.QtWidgets import QApplication, QDialog
 
-    # 2. Instanciar Controlador MVC
-    controlador = LibroController()
+from config import APP_NAME
+from controllers.auth_controller import AuthController
+from database.db_manager import get_default_database
+from views.login_view import LoginView
+from views.main_window import MainWindow
 
-    # 3. Lanzar Vista de escritorio CustomTkinter
-    app = MainView(controlador)
-    app.mainloop()
+
+def main() -> int:
+    app = QApplication(sys.argv)
+    app.setApplicationName(APP_NAME)
+    database = get_default_database()
+    login = LoginView(AuthController(database))
+    if login.exec() != QDialog.DialogCode.Accepted:
+        database.close()
+        return 0
+
+    window = MainWindow(database, login.current_user)
+    window.show()
+    resultado = app.exec()
+    database.close()
+    return resultado
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

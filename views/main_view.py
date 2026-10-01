@@ -11,6 +11,7 @@ class MainView(ctk.CTk):
 
         self.title("SPGB ROMULO - GALLEGOS")
         self.geometry("1280x820")
+        self.protocol("WM_DELETE_WINDOW", self.cerrar_aplicacion)
 
         # ===================== THEME: NEGRO / BLANCO / AMARILLO =====================
         # Se usa Light para evitar problemas visuales del modo Dark en combinaciones hardcodeadas.
@@ -55,6 +56,15 @@ class MainView(ctk.CTk):
     def limpiar_ventana(self):
         for widget in self.winfo_children():
             widget.destroy()
+
+    def cerrar_aplicacion(self):
+        exito, resultado = self.controller.realizar_backup_automatico()
+        if not exito and not messagebox.askyesno(
+            "No se pudo respaldar",
+            f"{resultado}\n\n¿Desea cerrar la aplicación de todos modos?",
+        ):
+            return
+        self.destroy()
 
     # ========================== LOGIN ==========================
     def mostrar_pantalla_login(self):

@@ -1,59 +1,60 @@
-# SPGB Rómulo Gallegos — Sistema de Gestión Bibliotecaria
+# Sistema Bibliotecario Rómulo Gallegos
 
-Aplicación de escritorio para control de inventario central, catalogación Dewey y distribución de ejemplares a sedes dependientes de la red bibliotecaria.
+Aplicación de escritorio MVC para registrar, catalogar, ubicar y distribuir libros entre la Biblioteca Central y sus sucursales. La nueva interfaz usa PySide6, SQLAlchemy y SQLite; conserva los módulos anteriores en el repositorio, pero `main.py` inicia el sistema Qt.
+
+La primera pestaña tras iniciar sesión es el manual gráfico de usuario; también está disponible desde el menú **Ayuda**. La descripción técnica y la base para la presentación académica del proyecto están en [DESCRIPCION_PROYECTO.md](DESCRIPCION_PROYECTO.md).
 
 ## Requisitos
 
-- Python 3.11+
-- Tkinter (incluido en la mayoría de instalaciones de Python en Linux)
+- Python 3.11 o superior
+- Qt/PySide6 y dependencias listadas en `requirements.txt`
+- En Linux de escritorio se requiere el runtime OpenGL del sistema (paquete `libgl1` en Ubuntu/Debian)
 
-## Instalación
-
-```bash
-python3 -m venv env
-source env/bin/activate
-pip install -r requirements.txt
-```
-
-## Ejecución
+## Instalación y ejecución
 
 ```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
 python main.py
 ```
 
-La base de datos SQLite `biblioteca.db` se crea automáticamente al iniciar.
+En Windows, activa el entorno con `.venv\Scripts\activate`.
 
-## Usuarios de prueba
+## Primer acceso
 
-| Usuario   | Contraseña   | Rol                    |
-|-----------|--------------|------------------------|
-| admin     | admin123     | Administrador          |
-| central   | central123   | Bibliotecario Central  |
-| sede      | sede123      | Bibliotecario Sede     |
+La primera ejecución crea `data/biblioteca_central.db`, las tablas necesarias y la Biblioteca Central. El usuario inicial es `admin` con contraseña `admin123`; el sistema obliga a cambiarla en el primer ingreso y exige una contraseña de al menos 10 caracteres.
 
-## Módulos principales
+## Módulos
 
-- **Recepción** — ingreso de libros nuevos (estado `recibido`)
-- **Catalogación** — clasificación Dewey, cota Cutter-Sanborn y ubicación física
-- **Inventario** — matriz de stock por sede y gestión de ejemplares
-- **Distribución** — envío de lotes a bibliotecas dependientes
-- **Reportes** — fichas bibliográficas, actas de distribución y cotas en PDF
-- **Administración** — usuarios, respaldos y auditoría
+- Recepción: alta, búsqueda por texto/procedencia/fecha y corrección auditada de ingresos con número `REG-AAAA-NNNNN`.
+- Catalogación: pendientes, sugerencia Cutter, clasificación Dewey/LC persistida y asignación de cota con advertencia de duplicados.
+- Distribución: envíos `ENV-AAAAMMDD-NNN` sólo con libros catalogados; registra ubicación y movimientos.
+- Ubicación: búsqueda global, filtros por estado/biblioteca/sala, última ubicación, último movimiento e historial.
+- Reportes: recepción, catalogación, distribución e inventario por ubicación en PDF/Excel; exportación completa de tablas y respaldo SQLite.
+- Etiquetas: cotas PDF con dimensiones ajustables y fichas catalográficas de 7,5 × 12,5 cm, cuatro por hoja.
+- Usuarios: alta, edición, cambio de contraseña y activación/desactivación; las operaciones se autorizan en el controlador sólo para administradores.
 
-## Arquitectura
+Los respaldos se guardan en `data/backups` (o junto a la base configurada) y se rotan para conservar los siete más recientes. La aplicación también crea uno al cerrarse.
 
-```
-main.py
-├── models/
-│   ├── database.py      # Esquema SQLite y datos semilla
-│   └── libro_model.py   # Acceso a datos
-├── controllers/
-│   └── libro_controller.py
-└── views/
-    └── main_view.py     # Interfaz CustomTkinter
+## Pruebas
+
+```bash
+pytest -q
 ```
 
-## Licencia
+## Empaquetado
 
-Uso interno — SPGB Rómulo Gallegos.
-# blibliotca-app
+PyInstaller debe ejecutarse en el sistema operativo de destino; cada sistema necesita su propio build. En Linux de escritorio instala primero `libgl1`. Desde un entorno con las dependencias instaladas:
+
+```bash
+pyinstaller --noconfirm --onedir --name SistemaBibliotecarioRG \
+	--hidden-import=PySide6.QtSvg \
+	--hidden-import=reportlab.graphics.barcode \
+	--collect-all=sqlalchemy \
+	main.py
+```
+
+La base y los respaldos se crean en la carpeta `data` junto al ejecutable. Copia el directorio generado completo a la memoria USB.
+
+Antes de distribuir, valida el ejecutable en Windows 10/11 y Linux, y prueba inicio de sesión, escritura de datos, generación de PDF y backup desde una carpeta USB con permisos de escritura.

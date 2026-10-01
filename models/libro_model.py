@@ -2,6 +2,7 @@
 import sqlite3
 import csv
 import os
+from pathlib import Path
 from datetime import datetime
 
 class LibroModel:
@@ -147,13 +148,13 @@ class LibroModel:
         finally:
             conexion.close()
 
-    def actualizar_libro_y_ejemplar(self, isbn, titulo, autor,volumen,cantidad, editorial, anio, edicion, tema, dewey_codigo, clasificacion, idioma, origen, id_unico, estado, sala, estante, biblioteca_id):
+    def actualizar_libro_y_ejemplar(self, isbn, titulo, autor, editorial, anio, edicion, tema, dewey_codigo, clasificacion, idioma, origen, id_unico, estado, sala, estante, biblioteca_id):
         conexion = sqlite3.connect(self.db_path)
         cursor = conexion.cursor()
         try:
             cursor.execute("""
                 UPDATE libros 
-                SET titulo=?, autor=?,volumen=?,cantidad=?, editorial=?, anio=?, edicion=?, tema=?, dewey_codigo=?, clasificacion=?, idioma=?, origen=?
+                SET titulo=?, autor=?, editorial=?, anio=?, edicion=?, tema=?, dewey_codigo=?, clasificacion=?, idioma=?, origen=?
                 WHERE isbn=?
             """, (titulo, autor, editorial, anio, edicion, tema, dewey_codigo, clasificacion, idioma, origen, isbn))
 
@@ -434,12 +435,38 @@ class LibroModel:
             conexion.close()
 
     def realizar_backup(self, ruta_destino):
-        import shutil
+        origen = None
+        destino = None
         try:
-            shutil.copyfile("biblioteca.db", ruta_destino)
+            ruta = Path(ruta_destino)
+            ruta.parent.mkdir(parents=True, exist_ok=True)
+            origen = sqlite3.connect(self.db_path)
+            destino = sqlite3.connect(str(ruta))
+            origen.backup(destino)
             return True, "Copia de seguridad local creada con éxito."
         except Exception as e:
             return False, str(e)
+        finally:
+            if destino is not None:
+                destino.close()
+            if origen is not None:
+                origen.close()
+
+    def realizar_backup_automatico(self, directorio_destino, max_backups=7):
+        carpeta = Path(directorio_destino)
+        marca_tiempo = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        ruta_backup = carpeta / f"backup_{marca_tiempo}.db"
+        exito, mensaje = self.realizar_backup(ruta_backup)
+        if not exito:
+            return False, mensaje
+
+        try:
+            copias = sorted(carpeta.glob("backup_*.db"), key=lambda ruta: ruta.stat().st_mtime, reverse=True)
+            for copia_antigua in copias[max_backups:]:
+                copia_antigua.unlink()
+            return True, str(ruta_backup)
+        except Exception as e:
+            return False, f"Backup creado, pero no se pudo depurar el historial: {e}"
 
     # --- MÓDULO DE EXPORTACIÓN TOTAL A EXCEL/CSV ---
     def exportar_todo_a_csv(self, directorio_destino):
