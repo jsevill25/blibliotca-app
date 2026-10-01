@@ -1,7 +1,6 @@
 from pathlib import Path
 
-from PySide6.QtGui import QAction
-from PySide6.QtWidgets import QMainWindow, QMessageBox, QTabWidget
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPushButton, QStackedWidget, QVBoxLayout, QWidget
 
 from config import APP_NAME
 from controllers.auth_controller import AuthController
@@ -35,32 +34,81 @@ class MainWindow(QMainWindow):
         self.resize(1280, 820)
         apply_theme(self)
         self.backup = BackupController(database, Path(database.database_path).parent / "backups")
-        self.tabs = QTabWidget()
-        self.setCentralWidget(self.tabs)
+
+        central = QWidget()
+        root_layout = QHBoxLayout(central)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
+        self.setCentralWidget(central)
+
+        sidebar = QFrame()
+        sidebar.setObjectName("sidebar")
+        sidebar.setFixedWidth(240)
+        sidebar_layout = QVBoxLayout(sidebar)
+        sidebar_layout.setContentsMargins(12, 18, 12, 14)
+        sidebar_layout.setSpacing(6)
+        root_layout.addWidget(sidebar)
+
+        brand = QLabel("BIBLIOTECA CENTRAL")
+        brand.setObjectName("sidebarBrand")
+        brand.setWordWrap(True)
+        sidebar_layout.addWidget(brand)
+        user_label = QLabel(f"{user.nombre_completo or user.username}\n{user.rol}")
+        user_label.setObjectName("sidebarUser")
+        user_label.setWordWrap(True)
+        sidebar_layout.addWidget(user_label)
+        sidebar_layout.addSpacing(18)
+
+        self.pages = QStackedWidget()
+        self.navigation = {}
+        root_layout.addWidget(self.pages, 1)
+
         self.manual_view = ManualView()
-        self.tabs.addTab(self.manual_view, "Manual de uso")
+        self._add_page("Manual de uso", self.manual_view, sidebar_layout)
         recepcion = RecepcionController(database)
         catalogacion = CatalogacionController(database)
         ubicacion = UbicacionController(database)
-        self.tabs.addTab(RecepcionView(recepcion, user.id), "Recepción")
-        self.tabs.addTab(CatalogacionView(catalogacion, user.id), "Catalogación")
+        self._add_page("Recepción", RecepcionView(recepcion, user.id), sidebar_layout)
+        self._add_page("Catalogación", CatalogacionView(catalogacion, user.id), sidebar_layout)
         distribucion = DistribucionView(DistribucionController(database), user.id)
-        self.tabs.addTab(distribucion, "Distribución")
-        self.tabs.addTab(UbicacionView(ubicacion, user.id), "Ubicación y búsqueda")
-        self.tabs.addTab(EtiquetasView(ubicacion, __import__("controllers.etiqueta_controller", fromlist=["EtiquetaController"]).EtiquetaController()), "Etiquetas")
-        self.tabs.addTab(ReportesView(ReportesController(database), ubicacion, self.backup, database.engine), "Reportes y backup")
+        self._add_page("Distribución", distribucion, sidebar_layout)
+        self._add_page("Ubicación y búsqueda", UbicacionView(ubicacion, user.id), sidebar_layout)
+        self._add_page("Etiquetas", EtiquetasView(ubicacion, __import__("controllers.etiqueta_controller", fromlist=["EtiquetaController"]).EtiquetaController()), sidebar_layout)
+        self._add_page("Reportes y backup", ReportesView(ReportesController(database), ubicacion, self.backup, database.engine), sidebar_layout)
         if user.rol == "admin":
-            self.tabs.addTab(UsuariosView(AuthController(database), user.id), "Usuarios")
+            self._add_page("Usuarios", UsuariosView(AuthController(database), user.id), sidebar_layout)
             bibliotecas = BibliotecasView(BibliotecaController(database))
             bibliotecas.actualizadas.connect(distribucion._cargar_destinos)
-            self.tabs.addTab(bibliotecas, "Sucursales")
-        ayuda = self.menuBar().addMenu("Ayuda")
-        abrir_manual = QAction("Abrir manual de usuario", self)
-        abrir_manual.triggered.connect(lambda: self.tabs.setCurrentWidget(self.manual_view))
-        ayuda.addAction(abrir_manual)
-        salir = QAction("Cerrar sesión", self)
-        salir.triggered.connect(self.close)
-        self.menuBar().addAction(salir)
+            self._add_page("Sucursales", bibliotecas, sidebar_layout)
+
+        sidebar_layout.addStretch(1)
+        logout = QPushButton("Cerrar sesión")
+        logout.setObjectName("sidebarNav")
+        logout.clicked.connect(self.close)
+        sidebar_layout.addWidget(logout)
+        self._show_page("Manual de uso")
+
+    def _add_page(self, title: str, view: QWidget, sidebar_layout: QVBoxLayout) -> None:
+        view.setObjectName("moduleView")
+        card = QFrame()
+        card.setObjectName("contentCard")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(18, 16, 18, 16)
+        card_layout.addWidget(view)
+        self.pages.addWidget(card)
+
+        button = QPushButton(title)
+        button.setObjectName("sidebarNav")
+        button.setCheckable(True)
+        button.clicked.connect(lambda _checked=False, page=title: self._show_page(page))
+        sidebar_layout.addWidget(button)
+        self.navigation[title] = (button, card)
+
+    def _show_page(self, title: str) -> None:
+        button, page = self.navigation[title]
+        self.pages.setCurrentWidget(page)
+        for nav_button, _page in self.navigation.values():
+            nav_button.setChecked(nav_button is button)
 
     def closeEvent(self, event) -> None:
         exito, resultado = self.backup.crear_backup()

@@ -9,12 +9,12 @@ BACKUP_DIR = DATA_DIR / "backups"
 DATABASE_PATH = DATA_DIR / "biblioteca_central.db"
 
 COLORS = {
-    "black": "#1A1A1A",
-    "yellow": "#F5C518",
+    "black": "#000000",
+    "yellow": "#EAB308",
     "white": "#FFFFFF",
-    "gray": "#6B6B6B",
-    "surface": "#F4F4F1",
-    "border": "#D4D4D0",
+    "gray": "#6B7280",
+    "surface": "#F3F4F6",
+    "border": "#D1D5DB",
     "success": "#247A4B",
     "danger": "#B53A32",
 }
