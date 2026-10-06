@@ -78,7 +78,7 @@ class MainWindow(QMainWindow):
         ubicacion = UbicacionController(database)
         self._add_page("Recepción", RecepcionView(recepcion, user.id), sidebar_layout)
         self._add_page("Catalogación", CatalogacionView(catalogacion, user.id), sidebar_layout)
-        etiquetas = EtiquetaController()
+        etiquetas = EtiquetaController(database, user.id)
         self._add_page("Fichero e inventario", FicheroView(FicheroController(database), etiquetas), sidebar_layout)
         distribucion = DistribucionView(DistribucionController(database), user.id)
         self._add_page("Distribución", distribucion, sidebar_layout)
@@ -89,12 +89,13 @@ class MainWindow(QMainWindow):
             ReportesView(
                 ReportesController(database), ubicacion, self.backup, database.engine,
                 can_export_all=user.rol == "admin",
+                database=database, usuario_id=user.id,
             ),
             sidebar_layout,
         )
         if user.rol == "admin":
             self._add_page("Usuarios", UsuariosView(AuthController(database), user.id), sidebar_layout)
-            bibliotecas = BibliotecasView(BibliotecaController(database))
+            bibliotecas = BibliotecasView(BibliotecaController(database), user.id)
             bibliotecas.actualizadas.connect(distribucion._cargar_destinos)
             self._add_page("Sucursales", bibliotecas, sidebar_layout)
 
@@ -135,7 +136,7 @@ class MainWindow(QMainWindow):
             nav_button.setChecked(nav_button is button)
 
     def closeEvent(self, event) -> None:
-        exito, resultado = self.backup.crear_backup()
+        exito, resultado = self.backup.crear_backup(self.user.id, "escritorio")
         if not exito and QMessageBox.question(self, "Backup fallido", f"No se pudo crear el respaldo: {resultado}\n¿Cerrar de todos modos?") != QMessageBox.StandardButton.Yes:
             event.ignore()
             return

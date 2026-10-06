@@ -12,7 +12,7 @@ def test_database_initializes_schema_seed_and_foreign_keys(tmp_path):
     tables = set(inspect(database.engine).get_table_names())
     assert {
         "libros", "recepcion", "catalogacion", "bibliotecas", "ubicaciones",
-        "bultos", "bulto_libros", "movimientos", "usuarios",
+        "bultos", "bulto_libros", "movimientos", "usuarios", "auditoria_log",
     } <= tables
 
     with database.session() as session:

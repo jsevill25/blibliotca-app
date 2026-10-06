@@ -3,16 +3,16 @@
 **Sistema evaluado:** Biblioteca Central Rómulo Gallegos  
 **Fecha de revisión:** 6 de octubre de 2026  
 **Tipo de trabajo:** revisión técnica de código fuente, arquitectura y pruebas disponibles  
-**Resultado global:** **Las remediaciones de A-01 a A-03 cuentan con cambios de código; la puesta en marcha aún requiere pruebas en equipos reales y resolver los riesgos web condicionados.**  
+**Resultado global:** **A-01 a A-03 cuentan con controles implementados y probados; A-02 y A-09 tienen mitigaciones verificadas; A-07 está parcialmente mitigado. La puesta en marcha sigue condicionada a pruebas de despliegue y riesgos residuales.**
 **Base de revisión:** estado del workspace disponible durante esta revisión; no se asocia a un commit de liberación.
 
 ## 1. Resumen ejecutivo
 
 El sistema ofrece una base funcional para el flujo local de recepción, catalogación, ubicación y distribución. La arquitectura separa vistas, controladores, modelos y servicios; usa SQLAlchemy con claves foráneas SQLite habilitadas; las contraseñas se almacenan con PBKDF2-HMAC-SHA256, sal individual y comparación constante; y existen pruebas automatizadas para persistencia, flujos, documentos y respaldos.
 
-La revisión inicial encontró riesgos en confidencialidad, autorización y exportación XLSX. Durante las pruebas de disponibilidad se añadieron mitigaciones para A-01 a A-03: la exportación integral queda limitada al rol administrador en la vista y su método de acción, se excluyen los hashes/sales y se neutralizan textos que podrían convertirse en fórmulas; la API bloquea consultas y escrituras durante el cambio inicial obligatorio. Se añadieron pruebas para verificar los secretos omitidos, la neutralización de prefijos de fórmula y el flujo web de cambio de clave. La comprobación dinámica de la interfaz Qt no fue posible en este entorno por falta de `libGL.so.1`.
+La revisión inicial encontró riesgos en confidencialidad, autorización y exportación XLSX. La implementación actual limita la exportación integral a administrador en vista y servicio, excluye hash/sal de Excel y PDF, neutraliza valores que podrían convertirse en fórmulas, impone el cambio de clave obligatorio en operaciones web y bloquea escrituras web fuera de modo demo. Se agregó `auditoria_log` para inicios de sesión, cambios de clave, acciones administrativas, exportaciones y respaldos. La suite automatizada actual incluye 24 pruebas aprobadas. La interfaz Qt no pudo verificarse dinámicamente en este entorno por falta de `libGL.so.1`.
 
-**Dictamen:** los cambios y las pruebas locales no equivalen a autorización de puesta en producción. No exponer la vista web a redes compartidas: siguen abiertos los hallazgos de transporte/sesión y la discrepancia sobre escrituras en modo no demo. Antes de operar con datos reales siguen siendo necesarios el piloto institucional, restauración en equipo limpio, revisión de permisos de archivos e impresión/aceptación del personal.
+**Dictamen:** los cambios y las pruebas locales no equivalen a certificación ni autorización de puesta en producción. No exponer la vista web de prueba a redes compartidas: no incorpora TLS ni expiración/rotación de sesión; `Secure` se habilita por configuración de producción y presupone HTTPS. Antes de operar con datos reales siguen siendo necesarios el piloto institucional, restauración en equipo limpio, revisión de permisos de archivos e impresión/aceptación del personal.
 
 ## 2. Alcance, método y limitaciones
 
@@ -50,14 +50,14 @@ La severidad indicada es inherente al código observado; la probabilidad prácti
 
 **Evidencia inicial:** `views/main_window.py` agregaba `ReportesView` para ambos roles y la exportación integral no comprobaba permisos; `services/excel_service.py` escribía también `usuarios.password_hash` y `usuarios.salt`. La tabla contiene ambos valores en `database/models.py`.
 
-**Cambio y verificación:** `views/main_window.py` habilita la opción sólo para administradores; `views/reportes_view.py` oculta el botón y vuelve a verificar el rol dentro del método; `services/excel_service.py` excluye hash y sal incluso de la exportación administrativa. La prueba XLSX verifica la ausencia de esas columnas. La verificación interactiva por rol queda pendiente porque no se pudo iniciar Qt en este entorno.
+**Cambio y verificación:** `views/main_window.py` habilita la opción sólo para administradores; `views/reportes_view.py` oculta el botón y vuelve a verificar el rol dentro del método; `services/excel_service.py` requiere autorización administrativa y excluye hash/sal incluso en la exportación permitida; las tablas de reporte PDF también filtran esos campos. Pruebas automatizadas verifican denegación por defecto, omisión de columnas y ausencia de valores secretos. La verificación interactiva por rol queda pendiente porque no se pudo iniciar Qt en este entorno.
 
 **Riesgo residual:** la exportación administrativa todavía contiene datos operativos completos; se recomienda limitar el acceso al archivo y mantener un procedimiento de custodia. Si se distribuyeron XLSX integrales antes de la corrección, tratarlos como posible exposición de credenciales.
 
 ### A-02. El cambio inicial obligatorio no está impuesto por la API
 
 **Severidad:** Alta en modo web; Moderada en escritorio  
-**Estado:** Remediado en rutas HTTP probadas; credencial inicial estática aún requiere gestión de despliegue
+**Estado:** Remediado en rutas HTTP probadas; la credencial inicial estática aún requiere gestión de despliegue
 
 **Evidencia inicial:** el usuario `admin` se crea con `debe_cambiar_clave=True` y la documentación publica la clave inicial. La API web originalmente no imponía la marca.
 
@@ -79,9 +79,9 @@ La severidad indicada es inherente al código observado; la probabilidad prácti
 ### A-04. Servidor web sin TLS ni atributos completos de sesión si se expone a red
 
 **Severidad:** Moderada; Alta si se enlaza fuera de loopback  
-**Estado:** Abierto / condicionado
+**Estado:** Mitigado parcialmente; exposición de red continúa abierta
 
-**Evidencia:** `web_preview.py` usa `ThreadingHTTPServer` y admite `--host`; opera sobre HTTP. La cookie declara `HttpOnly` y `SameSite=Strict`, pero no `Secure`, expiración ni renovación. La ejecución documentada mantiene el servicio en `127.0.0.1`, lo cual es la configuración recomendada actual.
+**Evidencia:** `web_preview.py` usa `ThreadingHTTPServer` y admite `--host`; el servidor no ofrece TLS ni expiración/rotación de sesiones. Las cookies usan `HttpOnly` y `SameSite=Strict`; `Secure` se agrega cuando `BLIBLIOTECA_ENV=production`, `APP_ENV=production` o `BLIBLIOTECA_COOKIE_SECURE=1`. La configuración recomendada sigue siendo loopback para esta vista de prueba.
 
 **Impacto:** si se configura un host accesible desde la LAN, credenciales y cookies viajan sin cifrado de transporte; la sesión permanece en memoria hasta logout/proceso detenido y no tiene expiración propia. También aumenta la superficie de ataque de la API de pruebas.
 
@@ -89,18 +89,18 @@ La severidad indicada es inherente al código observado; la probabilidad prácti
 
 **Criterio de cierre:** comprobación de configuración que impide escucha no-loopback en modo local; o controles TLS y sesión verificados en una configuración aprobada para red.
 
+**Verificación añadida:** prueba unitaria comprueba atributos de cookie en desarrollo y configuración productiva. Esto no implementa TLS ni convierte el servidor de prueba en una aplicación apta para red.
+
 ### A-09. La vista web anunciada como lectura puede modificar la base activa
 
 **Severidad:** Moderada  
-**Estado:** Abierto
+**Estado:** Remediado en rutas mutadoras cubiertas por integración HTTP
 
-**Evidencia:** `README.md` indica que sin `--demo` se puede consultar una base existente en modo lectura y que las escrituras sólo están habilitadas en `--demo`. Sin embargo, `main.py` inicia `run_web_preview()` con la base activa al elegir Web. En `web_preview.py`, las rutas autenticadas POST para `/api/recepcion`, `/api/catalogacion`, `/api/distribucion` y `/api/ubicacion` ejecutan los controladores sin verificar `self.demo_mode`; el flag sólo identifica la modalidad y la base temporal.
+**Evidencia inicial:** las rutas autenticadas POST para recepción, catalogación, distribución y ubicación ejecutaban controladores sin verificar `self.demo_mode`.
 
-**Impacto:** una persona puede iniciar la modalidad creyendo que es de consulta y alterar registros reales; incluso con controles de autenticación válidos, una operación accidental o inesperada afecta la integridad de los datos y el historial.
+**Cambio y verificación:** `web_preview.py` rechaza con 403 las rutas mutadoras (incluidas sucursales/usuarios) y PATCH cuando `demo_mode` es falso, manteniendo disponible el cambio de clave. La prueba HTTP intenta escritura fuera de modo demo y confirma rechazo y ausencia de persistencia en la base temporal.
 
-**Recomendación:** decidir explícitamente el contrato: implementar un guardado de sólo lectura real para todas las rutas mutadoras cuando `demo_mode` sea falso, o actualizar claramente la interfaz y documentación para advertir que la vista web opera sobre la base activa y es de lectura/escritura. Mantener `--demo` aislado. Recomiendo requerir una opción explícita de habilitación de escritura para una base real.
-
-**Criterio de cierre:** prueba de integración inicia servidor contra base no demo, intenta cada endpoint mutador y confirma rechazo sin alteración de tablas; la modalidad demo continúa escribiendo sólo en su base temporal.
+**Riesgo residual:** la cobertura automatizada comprueba el guard principal y las mutaciones críticas, pero no sustituye una revisión exhaustiva de rutas futuras; cada endpoint nuevo con efectos debe añadirse al control y a pruebas.
 
 ### A-05. Cutter automático no equivale a consulta Cutter-Sanborn ni garantiza norma BNV
 
@@ -115,31 +115,31 @@ La severidad indicada es inherente al código observado; la probabilidad prácti
 
 **Criterio de cierre:** pruebas verificadas por catalogador para autores y títulos de muestra, incluidos diacríticos y homónimos; documentación de fuente/versión de tabla y revisión manual explícita cuando no exista coincidencia.
 
-### A-06. Base y respaldos sin cifrado de aplicación y sin restauración operacional evidenciada
+### A-06. Base y respaldos sin cifrado ni procedimiento institucional de recuperación
 
 **Severidad:** Moderada  
-**Estado:** Abierto
+**Estado:** Mitigado parcialmente; verificación y restauración aislada probadas
 
-**Evidencia:** `config.py` ubica SQLite y respaldos junto a la aplicación. `services/backup_service.py` genera copias SQLite sin cifrado, conserva siete archivos en el mismo destino y elimina los más antiguos. Las pruebas verifican creación, rotación e integridad SQLite, no recuperación integral en una instalación nueva. No se encontró política de cifrado, separación de medios ni procedimiento de restauración en la documentación revisada.
+**Evidencia:** `config.py` ubica SQLite y respaldos junto a la aplicación. `services/backup_service.py` genera copias SQLite sin cifrado, conserva siete archivos en el mismo destino y elimina los más antiguos. El servicio ejecuta `PRAGMA integrity_check` antes de reportar éxito; las pruebas restauran una copia en una base temporal nueva y verifican integridad, datos y relaciones. No hay un asistente de restauración en la aplicación ni política institucional de cifrado o separación de medios.
 
-**Impacto:** pérdida, robo o copia de la carpeta (incluida memoria portable) expone datos bibliográficos y personales; la misma avería física puede afectar base y respaldos. Una copia creada no demuestra que pueda recuperarse y reanudarse la operación.
+**Impacto:** pérdida, robo o copia de la carpeta (incluida memoria portable) expone datos bibliográficos y personales; la misma avería física puede afectar base y respaldos. Una prueba automatizada en base temporal no acredita que el personal pueda recuperar una instalación en un equipo limpio.
 
 **Recomendación:** usar cifrado de volumen/dispositivo o copias cifradas con gestión institucional de claves; conservar una copia separada del equipo; establecer responsables, retención, verificación de integridad y simulacros periódicos de restauración. Limitar permisos del directorio de datos al usuario del sistema operativo.
 
-**Criterio de cierre:** procedimiento aprobado, evidencia de restauración en dispositivo limpio y controles de acceso/cifrado comprobados.
+**Criterio de cierre:** procedimiento aprobado, evidencia de restauración por personal en dispositivo limpio y controles de acceso/cifrado comprobados.
 
 ### A-07. Trazabilidad de movimientos no cubre acciones administrativas ni valores anteriores
 
 **Severidad:** Moderada  
-**Estado:** Abierto
+**Estado:** Mitigado parcialmente; registro operativo disponible, cobertura institucional pendiente
 
-**Evidencia:** `movimientos` registra eventos bibliotecarios principales. `recepcion` conserva banderas, usuario y fecha de la última modificación, pero no historial de valores anterior/nuevo. Las operaciones de creación, modificación y desactivación de usuarios no registran un evento de auditoría persistente. No se encontró bitácora general de inicios de sesión, exportaciones, consultas sensibles o fallos de autorización.
+**Evidencia inicial:** no existía bitácora general. Ahora `auditoria_log` registra login exitoso/fallido, cambio de clave, creación/edición/activación de cuentas y sucursales, exportaciones y respaldos. `recepcion` aún no conserva un historial completo de valores antes/después; tampoco se registran todas las operaciones bibliotecarias ni los fallos de autorización.
 
-**Impacto:** ante un cambio incorrecto o una exportación indebida no siempre se puede establecer quién hizo qué, cuándo y qué dato cambió. Una edición posterior puede sustituir la única evidencia de la corrección anterior.
+**Impacto residual:** ante un cambio bibliográfico incorrecto no siempre se puede establecer quién cambió qué valor anterior/nuevo. Un usuario con acceso directo a la base puede modificar o eliminar filas del log; la bitácora no es append-only, no tiene controles de retención ni alertas.
 
-**Recomendación:** definir eventos auditables y crear una bitácora de sólo anexado con actor, hora UTC/local documentada, operación, entidad/ID y antes/después minimizados. Registrar altas/bajas de usuarios, cambios de rol/clave sin guardar secretos, exportaciones, cambios de catalogación y ubicación. Restringir borrado y exportación de la bitácora.
+**Recomendación:** completar bitácora de sólo anexado con usuario de sistema limitado, almacenar hora UTC o documentar zona horaria, agregar historial antes/después minimizado y auditar modificaciones de catalogación/ubicación. Definir retención y restringir borrado/exportación de la bitácora.
 
-**Criterio de cierre:** pruebas verifican eventos para acciones privilegiadas y correcciones; una actualización no elimina la evidencia previa y la bitácora no guarda contraseñas ni hashes.
+**Criterio de cierre:** pruebas verifican eventos para acciones privilegiadas y correcciones; una actualización no elimina evidencia previa, la bitácora no guarda secretos y la institución aprueba sus permisos, retención y destino.
 
 ### A-08. Migraciones de esquema no versionadas
 
@@ -162,9 +162,9 @@ La severidad indicada es inherente al código observado; la probabilidad prácti
 - Claves foráneas activadas en SQLite y restricciones para roles, procedencias y estados.
 - Contexto de sesión SQLAlchemy con commit/rollback explícito.
 - Validaciones de estado para catalogación y distribución; verificación de libros catalogados antes del envío.
-- Cookie web `HttpOnly` y `SameSite=Strict`; servidor documentado en loopback.
-- Copia SQLite mediante API de backup y rotación limitada; prueba de integridad de copia.
-- Suite automatizada con 13 casos recolectados: arquitectura (2), recepción MVC (5), servicios/sucursales (2) y flujo integral (4).
+- Cookie web `HttpOnly` y `SameSite=Strict`, con `Secure` condicional a producción; servidor documentado en loopback.
+- Copia SQLite mediante API de backup, verificación automática de `PRAGMA integrity_check` y rotación limitada; existe prueba de restauración en una DB temporal.
+- Suite automatizada de 24 pruebas: arquitectura (4), auditoría internacional (6), disponibilidad operativa (3), recepción MVC (5), servicios/sucursales (2) y flujo integral (4).
 
 Estos controles no compensan los hallazgos abiertos ni validan la configuración final de despliegue.
 
@@ -172,30 +172,28 @@ Estos controles no compensan los hallazgos abiertos ni validan la configuración
 
 ### Prioridad inmediata (antes de datos reales o acceso remoto)
 
-1. **A-01:** quitar hash/sal de toda exportación; limitar exportación de tablas a administradores y registrar uso.
-2. **A-02:** hacer cumplir cambio obligatorio en servidor/API y evitar credenciales bootstrap conocidas en instalaciones de producción.
-3. **A-04:** mantener web sólo en loopback hasta disponer de HTTPS y control de sesión adecuados.
-4. **A-03:** neutralizar fórmulas en todo XLSX generado.
+1. Rotar la credencial bootstrap conocida y establecer el proceso seguro de instalación.
+2. **A-04:** mantener web sólo en loopback hasta disponer de TLS y controles de sesión completos.
+3. Mantener las pruebas de exportación segura y verificar compatibilidad con las hojas de cálculo aprobadas.
 
 ### Prioridad de operación segura
 
-5. **A-06:** cifrado, permisos, copia externa y prueba documentada de restauración.
-6. **A-07:** ampliar el registro de auditoría para cambios privilegiados y correcciones.
+4. **A-06:** cifrado, permisos, copia externa y prueba documentada de restauración.
+5. **A-07:** ampliar el registro de auditoría para cambios bibliotecarios, antes/después y política de retención.
 
 ### Prioridad de calidad y mantenimiento
 
-7. **A-05:** validar Cutter con fuente normativa y personal bibliotecario.
-8. **A-08:** introducir migraciones versionadas y verificables.
+6. **A-05:** validar Cutter con fuente normativa y personal bibliotecario.
+7. **A-08:** introducir migraciones versionadas y verificables.
 
 ## 7. Criterios de aceptación global
 
 La recomendación de uso con datos reales podrá reconsiderarse cuando:
 
-- las pruebas demuestren que una cuenta no administrativa no puede obtener exportaciones con material de autenticación;
-- la API bloquee el acceso funcional mientras una cuenta tenga cambio de clave obligatorio pendiente;
-- las entradas XLSX no se interpreten como fórmulas;
-- el servicio web no se exponga sin TLS y controles de sesión;
+- se rote la credencial bootstrap y se documente el proceso seguro de instalación;
+- se mantenga la prohibición de exponer la vista web sin TLS y gestión de sesión aprobadas;
+- se valide la bitácora contra la política de retención y se amplíe a los cambios bibliotecarios que requiera la institución;
 - se realice una restauración documentada desde un respaldo separado;
 - la institución acepte el proceso de revisión de cotas y la fuente de Cutter.
 
-Se debe volver a ejecutar `pytest -q`, añadir pruebas específicas para los controles anteriores y guardar la salida asociada a la versión candidata. El resultado de la auditoría debe actualizarse después de remediar y volver a revisar cada hallazgo; no marcar los puntos como cerrados sólo por haber implementado un cambio.
+La ejecución actual de `pytest -v` registró **24 aprobadas y 0 fallidas**. La verificación automatizada debe repetirse en el entorno candidato y complementarse con pruebas de instalación, seguridad y aceptación; no equivale a certificación.

@@ -25,7 +25,7 @@ def test_backup_excel_y_pdf_se_generan_y_rotan(tmp_path):
     ExcelService().exportar({"Inventario": [{"titulo": "Libro", "estado": "recibido"}]}, tmp_path / "inventario.xlsx")
     assert is_zipfile(tmp_path / "inventario.xlsx")
     respaldo_excel = tmp_path / "respaldo_completo.xlsx"
-    ExcelService().exportar_base_datos(database.engine, respaldo_excel)
+    ExcelService().exportar_base_datos(database.engine, respaldo_excel, administrador=True)
     libro_excel = load_workbook(respaldo_excel, read_only=True)
     assert {"libros", "usuarios", "movimientos", "bulto_libros"} <= set(libro_excel.sheetnames)
     columnas_usuario = next(libro_excel["usuarios"].iter_rows(values_only=True))

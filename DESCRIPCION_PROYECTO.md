@@ -16,9 +16,9 @@
 
 La Biblioteca Central Rómulo Gallegos cumple funciones de recepción, catalogación, almacenamiento temporal y distribución de libros a bibliotecas sucursales. Cuando estas actividades se registran manualmente, aumenta el riesgo de duplicidad, pérdida de trazabilidad, errores en la identificación de ejemplares y dificultad para conocer el inventario disponible en cada sede. Este proyecto desarrolla una aplicación de escritorio portable para apoyar ese flujo mediante una base de datos local, módulos de operación bibliotecaria y generación de documentos.
 
-La solución utiliza Python y PySide6 para la interfaz gráfica, SQLAlchemy como capa de persistencia sobre SQLite, ReportLab para documentos PDF y openpyxl para hojas de cálculo. Su arquitectura separa vistas, controladores, modelos persistentes y servicios auxiliares. El flujo principal registra los libros con un número de control, permite asignar clasificación y cota, genera etiquetas y fichas, y registra los envíos a sucursales junto con movimientos y ubicaciones. También incorpora autenticación, roles, reportes y respaldos locales.
+La solución utiliza Python y PySide6 para la interfaz gráfica, SQLAlchemy como capa de persistencia sobre SQLite, ReportLab para documentos PDF y openpyxl para hojas de cálculo. Su arquitectura separa vistas, controladores, modelos persistentes y servicios auxiliares. El flujo principal registra los libros con un número de control, permite asignar clasificación y cota, genera etiquetas y fichas, y registra los envíos a sucursales junto con movimientos y ubicaciones. También incorpora autenticación por roles, auditoría operativa, reportes, exportaciones protegidas y respaldos locales.
 
-La aplicación está orientada a funcionar sin conexión a Internet y a mantener sus datos en una carpeta portable. En la versión actual, la suite automatizada contiene diez pruebas aprobadas en el entorno de desarrollo. La generación del paquete ejecutable y la validación física de impresión deben comprobarse en equipos Windows y Linux de destino antes de una distribución institucional.
+La aplicación está orientada a funcionar sin conexión a Internet y a mantener sus datos en una carpeta local portable. La suite automatizada documentada contiene 24 pruebas aprobadas en el entorno de desarrollo. La generación del paquete ejecutable, la instalación y la validación física de impresión deben comprobarse en equipos Windows y Linux de destino antes de una distribución institucional.
 
 **Palabras clave:** biblioteca, inventario, catalogación, SQLite, aplicación portable, MVC, trazabilidad.
 
@@ -111,13 +111,17 @@ flowchart LR
 
 **Catalogación.** Presenta libros pendientes y permite seleccionar el sistema de clasificación, registrar su código, revisar la sugerencia Cutter y formar la cota. Al confirmar, actualiza el estado y agrega el evento de catalogación al historial.
 
-**Etiquetas y fichas.** Permite seleccionar libros catalogados y exportar cotas de lomo de dimensiones ajustables. Las fichas se disponen cuatro por hoja A4, con tamaño nominal de 7,5 × 12,5 cm.
+**Etiquetas y fichas.** Permite seleccionar libros catalogados y exportar cotas de lomo de dimensiones ajustables. La Ficha Catalográfica Individual distribuye cuatro fichas por página Letter, en cuadrícula 2×2 con guías de corte; la impresión física debe validar escala y márgenes.
 
-**Distribución.** Registra una biblioteca de destino, un conjunto de libros catalogados y observaciones. Genera un código de envío, actualiza los estados y ubicaciones, y permite producir un documento PDF con copias para ambas partes y una mini-ficha para la caja.
+**Distribución.** Registra una biblioteca de destino, un conjunto de libros catalogados y observaciones. Genera un código de envío, actualiza los estados y ubicaciones, y permite producir Control de Envío al Sistema Nacional de Bibliotecas Públicas, Nota de Entrega con datos editables de quien recibe y mini-ficha para la caja.
 
 **Ubicación e historial.** Busca por título, autor, ISBN, cota o número de registro. Presenta la ubicación actual y el último movimiento, permite registrar una nueva ubicación física y muestra el historial completo.
 
-**Reportes y respaldos.** Ofrece resúmenes de recepción, catalogación y distribución; inventario por ubicación; exportaciones PDF/Excel; exportación de las tablas; y copia de la base SQLite. Al cerrar la aplicación se intenta crear un respaldo automático y se conserva una rotación de siete copias.
+**Reportes y respaldos.** Ofrece resúmenes e inventario PDF/Excel, matriz anual por biblioteca y áreas Dewey, exportación integral sólo para administradores y copia de la base SQLite. Los XLSX neutralizan posibles fórmulas y omiten hashes/sales de usuarios. El respaldo valida integridad y la aplicación conserva una rotación de siete copias.
+
+**Matriz de control por sucursales.** El módulo Fichero genera para un libro catalogado la matriz institucional I/D/P, calculada a partir de la ubicación más reciente y del estado actual del libro.
+
+**Auditoría operativa.** La bitácora registra accesos correctos e incorrectos, cambios de clave, operaciones administrativas, exportaciones y respaldos. No es un registro inmutable y no captura todos los cambios bibliográficos.
 
 **Usuarios y sucursales.** La gestión se presenta a administradores. Las operaciones de usuarios verifican el rol del solicitante; permiten crear, modificar, activar o desactivar cuentas y protegen la cuenta inicial para evitar perder el acceso administrativo.
 
@@ -203,16 +207,18 @@ La evaluación con usuarios reales, los instrumentos de recolección de datos y 
 
 ## 11. Verificación y estado de la versión
 
-La suite automatizada cubre inicialización de base y claves foráneas, alta y corrección de recepción, catalogación, distribución, búsqueda e historial, reportes, ramas, servicios PDF/Excel y respaldos. En la última ejecución registrada en el entorno de desarrollo, `pytest -q` aprobó diez pruebas; `compileall`, `git diff --check` y la revisión de errores del editor también finalizaron sin errores.
+La suite automatizada cubre inicialización de base y claves foráneas, alta y corrección de recepción, catalogación, distribución, búsqueda e historial, reportes, generación PDF/XLSX, auditoría, controles de autorización y respaldos. En la última ejecución registrada, `pytest -v` aprobó 24 pruebas y no registró fallos.
 
-La ejecución visual y el empaquetado no quedaron validados en ese contenedor: PySide6 no pudo cargarse por ausencia de `libGL.so.1` y PyInstaller no pudo usar el intérprete disponible porque fue construido sin biblioteca compartida. Antes de una publicación deben probarse en equipos de destino la interfaz Qt, los diálogos de archivos, escritura desde USB, generación e impresión de PDF y recuperación desde un respaldo.
+La ejecución visual de Qt no pudo validarse en este entorno por ausencia de `libGL.so.1`. La instalación final en equipos institucionales y la impresión física tampoco se han certificado. Antes de una publicación deben probarse en los equipos de destino la interfaz Qt, diálogos, escritura desde USB, generación e impresión PDF y restauración desde un respaldo.
 
 ## 12. Limitaciones y trabajo futuro
 
 - Ejecutar pruebas de aceptación con bibliotecarios y documentar sus resultados.
 - Verificar el empaquetado `onedir` en Windows 10/11 y distribuciones Linux objetivo.
-- Calibrar las dimensiones de etiquetas y fichas mediante impresión física en impresoras representativas.
+- Calibrar etiquetas y verificar tamaño, orientación y escala de fichas Letter mediante impresión física en impresoras representativas.
 - Definir un procedimiento institucional de recuperación ante pérdida o daño de la memoria USB.
+- Rotar la contraseña inicial conocida y definir la custodia, retención y protección de bitácoras y respaldos.
+- Mantener el servidor web de prueba en loopback; un uso en red requiere TLS y controles completos de sesión.
 - Evaluar gestión de préstamos, sincronización centralizada o acceso multiusuario sólo si se amplía el alcance y se diseña una arquitectura apropiada.
 - Incorporar migraciones versionadas del esquema si la aplicación evoluciona con instalaciones que ya contengan datos.
 

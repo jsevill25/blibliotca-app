@@ -7,12 +7,20 @@ from sqlalchemy import MetaData
 
 
 class ExcelService:
-    SENSITIVE_USER_COLUMNS = {"password_hash", "salt"}
+    SENSITIVE_COLUMNS = {"password_hash", "salt"}
+
+    @classmethod
+    def _columna_exportable(cls, nombre: str) -> bool:
+        return nombre.strip().casefold() not in cls.SENSITIVE_COLUMNS
 
     def exportar(self, hojas: dict[str, list[dict]], destino: str | Path) -> Path:
         return self._escribir(hojas, destino)
 
-    def exportar_base_datos(self, engine, destino: str | Path) -> Path:
+    def exportar_base_datos(
+        self, engine, destino: str | Path, *, administrador: bool = False,
+    ) -> Path:
+        if not administrador:
+            raise PermissionError("La exportación integral requiere autorización administrativa.")
         metadata = MetaData()
         metadata.reflect(bind=engine)
         hojas = {}
@@ -21,7 +29,7 @@ class ExcelService:
                 filas = [dict(fila._mapping) for fila in connection.execute(tabla.select())]
                 columnas = [
                     columna.name for columna in tabla.columns
-                    if not (tabla.name == "usuarios" and columna.name in self.SENSITIVE_USER_COLUMNS)
+                    if self._columna_exportable(columna.name)
                 ]
                 hojas[tabla.name] = {
                     "columnas": columnas,
@@ -35,11 +43,14 @@ class ExcelService:
         for nombre, contenido in hojas.items():
             hoja = libro.create_sheet(nombre[:31])
             if datos_crudos:
-                columnas = contenido["columnas"]
-                filas = contenido["filas"]
+                columnas = [columna for columna in contenido["columnas"] if self._columna_exportable(columna)]
+                filas = [
+                    {columna: fila.get(columna, "") for columna in columnas}
+                    for fila in contenido["filas"]
+                ]
             else:
                 filas = contenido
-                columnas = list(filas[0]) if filas else []
+                columnas = [columna for columna in filas[0] if self._columna_exportable(columna)] if filas else []
             if columnas:
                 hoja.append(columnas)
                 for celda in hoja[1]:

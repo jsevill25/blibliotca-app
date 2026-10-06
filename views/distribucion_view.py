@@ -9,7 +9,7 @@ class DistribucionView(QWidget):
         super().__init__()
         self.controller = controller
         self.usuario_id = usuario_id
-        self.etiquetas = EtiquetaController()
+        self.etiquetas = EtiquetaController(controller.database, usuario_id)
         layout = QVBoxLayout(self)
         titulo = QLabel("Distribución a bibliotecas")
         titulo.setObjectName("pageTitle")

@@ -13,6 +13,8 @@ from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, 
 
 
 class PDFService:
+    SENSITIVE_COLUMNS = {"password_hash", "salt"}
+
     def __init__(self):
         self.styles = getSampleStyleSheet()
         self.small = ParagraphStyle("CatalogSmall", parent=self.styles["BodyText"], fontName="Helvetica", fontSize=10, leading=12, alignment=TA_LEFT)
@@ -25,7 +27,12 @@ class PDFService:
         return ruta
 
     def generar_tabla(self, titulo: str, columnas: list[str], filas: list[list], destino: str | Path) -> Path:
-        contenido = [Paragraph(titulo, self.styles["Title"]), Spacer(1, 0.5 * cm), Table([columnas, *filas], repeatRows=1, style=TableStyle([
+        indices = [indice for indice, columna in enumerate(columnas) if columna.strip().casefold() not in self.SENSITIVE_COLUMNS]
+        if not indices:
+            raise ValueError("La tabla no contiene columnas exportables.")
+        columnas_seguras = [columnas[indice] for indice in indices]
+        filas_seguras = [[fila[indice] for indice in indices if indice < len(fila)] for fila in filas]
+        contenido = [Paragraph(titulo, self.styles["Title"]), Spacer(1, 0.5 * cm), Table([columnas_seguras, *filas_seguras], repeatRows=1, style=TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1A1A1A")),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#F5C518")),
             ("GRID", (0, 0), (-1, -1), 0.4, colors.black),
@@ -40,13 +47,25 @@ class PDFService:
         for nombre, columnas, filas in secciones:
             contenido.append(Paragraph(nombre, self.styles["Heading2"]))
             if filas:
-                contenido.append(Table([columnas, *filas], repeatRows=1, style=TableStyle([
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1A1A1A")),
-                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#F5C518")),
-                    ("GRID", (0, 0), (-1, -1), 0.4, colors.black),
-                    ("FONTSIZE", (0, 0), (-1, -1), 8),
-                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ])))
+                indices = [
+                    indice for indice, columna in enumerate(columnas)
+                    if columna.strip().casefold() not in self.SENSITIVE_COLUMNS
+                ]
+                columnas_seguras = [columnas[indice] for indice in indices]
+                filas_seguras = [
+                    [fila[indice] for indice in indices if indice < len(fila)]
+                    for fila in filas
+                ]
+                if columnas_seguras:
+                    contenido.append(Table([columnas_seguras, *filas_seguras], repeatRows=1, style=TableStyle([
+                        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1A1A1A")),
+                        ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#F5C518")),
+                        ("GRID", (0, 0), (-1, -1), 0.4, colors.black),
+                        ("FONTSIZE", (0, 0), (-1, -1), 8),
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ])))
+                else:
+                    contenido.append(Paragraph("No hay campos exportables.", self.styles["BodyText"]))
             else:
                 contenido.append(Paragraph("Sin registros para el período seleccionado.", self.styles["BodyText"]))
             contenido.append(Spacer(1, 0.3 * cm))

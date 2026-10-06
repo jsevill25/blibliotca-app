@@ -6,23 +6,46 @@ from sqlalchemy import select
 from database.db_manager import DatabaseManager
 from database.models import User
 from database.seed_data import hash_password
+from services.audit_service import AuditService
 
 
 class AuthController:
     def __init__(self, database: DatabaseManager):
         self.database = database
 
-    def autenticar(self, username: str, password: str) -> tuple[bool, User | str]:
+    def autenticar(
+        self, username: str, password: str, origen: str = "escritorio",
+    ) -> tuple[bool, User | str]:
         with self.database.session() as session:
             user = session.scalar(select(User).where(User.username == username.strip()))
             if user is None or not user.activo:
+                AuditService.agregar(
+                    session, "LOGIN_FALLIDO", user.id if user else None, origen,
+                    f"Intento de acceso fallido para usuario '{username.strip()[:80]}'.",
+                )
                 return False, "Usuario o contraseña incorrectos."
             password_valido = hmac.compare_digest(user.password_hash, hash_password(password, user.salt))
             if not password_valido:
+                AuditService.agregar(
+                    session, "LOGIN_FALLIDO", user.id, origen,
+                    f"Intento de acceso fallido para usuario '{user.username}'.",
+                )
                 return False, "Usuario o contraseña incorrectos."
+            AuditService.agregar(
+                session, "LOGIN_EXITOSO", user.id, origen,
+                f"Inicio de sesión para usuario '{user.username}'.",
+            )
             return True, user
 
-    def cambiar_clave(self, user_id: int, clave_actual: str, clave_nueva: str) -> tuple[bool, str]:
+    def acceso_operativo_permitido(self, user_id: int) -> bool:
+        with self.database.session() as session:
+            user = session.get(User, user_id)
+            return bool(user and user.activo and not user.debe_cambiar_clave)
+
+    def cambiar_clave(
+        self, user_id: int, clave_actual: str, clave_nueva: str,
+        origen: str = "escritorio",
+    ) -> tuple[bool, str]:
         if len(clave_nueva) < 10:
             return False, "La nueva contraseña debe tener al menos 10 caracteres."
         with self.database.session() as session:
@@ -32,14 +55,24 @@ class AuthController:
             user.salt = secrets.token_hex(16)
             user.password_hash = hash_password(clave_nueva, user.salt)
             user.debe_cambiar_clave = False
+            AuditService.agregar(
+                session, "CAMBIO_CLAVE", user.id, origen,
+                f"El usuario '{user.username}' actualizó su contraseña.",
+            )
             return True, "Contraseña actualizada."
 
     @staticmethod
     def _solicitante_es_admin(session, solicitante_id: int | None) -> bool:
         solicitante = session.get(User, solicitante_id) if solicitante_id is not None else None
-        return bool(solicitante and solicitante.activo and solicitante.rol == "admin")
+        return bool(
+            solicitante and solicitante.activo
+            and not solicitante.debe_cambiar_clave and solicitante.rol == "admin"
+        )
 
-    def crear_usuario(self, username: str, nombre: str, password: str, rol: str, solicitante_id: int) -> tuple[bool, str]:
+    def crear_usuario(
+        self, username: str, nombre: str, password: str, rol: str,
+        solicitante_id: int, origen: str = "escritorio",
+    ) -> tuple[bool, str]:
         if not username.strip() or len(password) < 10 or rol not in {"admin", "bibliotecario"}:
             return False, "Indique usuario, rol válido y contraseña de al menos 10 caracteres."
         salt = secrets.token_hex(16)
@@ -52,9 +85,16 @@ class AuthController:
                 username=username.strip(), nombre_completo=nombre.strip(), rol=rol,
                 salt=salt, password_hash=hash_password(password, salt),
             ))
+            AuditService.agregar(
+                session, "ACCION_ADMIN", solicitante_id, origen,
+                f"Creó la cuenta '{username.strip()}' con rol '{rol}'.",
+            )
         return True, "Usuario creado."
 
-    def actualizar_usuario(self, user_id: int, username: str, nombre: str, rol: str, password: str, solicitante_id: int) -> tuple[bool, str]:
+    def actualizar_usuario(
+        self, user_id: int, username: str, nombre: str, rol: str,
+        password: str, solicitante_id: int, origen: str = "escritorio",
+    ) -> tuple[bool, str]:
         username = username.strip()
         if not username or rol not in {"admin", "bibliotecario"} or (password and len(password) < 10):
             return False, "Indique usuario, rol válido y, si cambia la contraseña, al menos 10 caracteres."
@@ -81,9 +121,16 @@ class AuthController:
             if password:
                 user.salt = secrets.token_hex(16)
                 user.password_hash = hash_password(password, user.salt)
+            AuditService.agregar(
+                session, "ACCION_ADMIN", solicitante_id, origen,
+                f"Actualizó la cuenta '{user.username}' (id {user.id}).",
+            )
         return True, "Usuario actualizado."
 
-    def cambiar_estado_usuario(self, user_id: int, activo: bool, solicitante_id: int) -> tuple[bool, str]:
+    def cambiar_estado_usuario(
+        self, user_id: int, activo: bool, solicitante_id: int,
+        origen: str = "escritorio",
+    ) -> tuple[bool, str]:
         with self.database.session() as session:
             if not self._solicitante_es_admin(session, solicitante_id):
                 return False, "Sólo un administrador activo puede gestionar usuarios."
@@ -99,10 +146,16 @@ class AuthController:
                 if otro_admin is None:
                     return False, "Debe mantenerse al menos un administrador activo."
             user.activo = activo
+            AuditService.agregar(
+                session, "ACCION_ADMIN", solicitante_id, origen,
+                f"{'Activó' if activo else 'Desactivó'} la cuenta '{user.username}' (id {user.id}).",
+            )
         return True, "Usuario activado." if activo else "Usuario desactivado."
 
-    def desactivar_usuario(self, user_id: int, solicitante_id: int) -> tuple[bool, str]:
-        return self.cambiar_estado_usuario(user_id, False, solicitante_id)
+    def desactivar_usuario(
+        self, user_id: int, solicitante_id: int, origen: str = "escritorio",
+    ) -> tuple[bool, str]:
+        return self.cambiar_estado_usuario(user_id, False, solicitante_id, origen)
 
     def listar_usuarios(self, solicitante_id: int) -> list[User]:
         with self.database.session() as session:

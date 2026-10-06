@@ -1,7 +1,7 @@
 # Documentación técnica y operativa
 
 **Sistema:** Biblioteca Central Rómulo Gallegos  
-**Versión documentada:** estado del repositorio revisado el 6 de octubre de 2026  
+**Versión documentada:** rama `mejora-sistema-en-pruebas`, estado revisado el 6 de octubre de 2026
 **Propósito:** describir arquitectura, módulos, datos, controles, operación y evidencias disponibles para mantenimiento y auditoría.  
 **Estado:** documentación basada en inspección estática del código y pruebas automatizadas. No constituye certificación ni reemplaza procedimientos aprobados por la institución.
 
@@ -23,7 +23,7 @@ flowchart LR
     E --> F
 ```
 
-La solución funciona localmente y no requiere un servicio de base de datos remoto. El modo web puede abrir la base activa; el modo `--demo` utiliza una base aislada temporal para pruebas. **La vista web sin `--demo` no es de sólo lectura en la implementación actual**: sus rutas autenticadas aceptan escrituras sobre la base configurada. La descripción de sólo lectura en `README.md` no coincide con ese comportamiento; véase A-09.
+La solución funciona localmente y no requiere un servicio de base de datos remoto. El modo web `--demo` utiliza una base temporal separada. Sin `--demo`, la vista web puede consultar la base configurada, pero las rutas mutadoras devuelven 403; la API permite el cambio obligatorio de clave y logout. La vista web usa HTTP sin TLS y no debe exponerse a redes compartidas.
 
 ## 2. Alcance funcional
 
@@ -31,13 +31,27 @@ La solución funciona localmente y no requiere un servicio de base de datos remo
 |---|---|---|
 | Recepción | Alta, consulta y edición antes de catalogar; número `REG-AAAA-NNNNN`; registro de procedencia y cambios. | `views/recepcion_view.py`, `controllers/recepcion_controller.py` |
 | Catalogación | Dewey o LC, sugerencia Cutter, cota manual o automática, rechazo/confirmación de cotas duplicadas. | `views/catalogacion_view.py`, `controllers/catalogacion_controller.py` |
-| Fichero | Búsqueda de libros catalogados, fichas y resumen por área; matriz anual I/D/P por libro y sucursal. | `views/fichero_view.py`, `controllers/fichero_controller.py` |
-| Etiquetas | PDF de cotas de lomo con ancho y alto configurables; fichas individuales, cuatro por página Letter. | `views/etiquetas_view.py`, `services/pdf_service.py` |
-| Distribución | Selección de libros catalogados, validación de destino, creación de envío `ENV-AAAAMMDD-NNN`, actualización de estado/ubicación y generación del control de envío y Nota de Entrega. | `views/distribucion_view.py`, `controllers/distribucion_controller.py` |
+| Fichero | Búsqueda de libros catalogados, resumen de inventario y matriz de control I/D/P por título y sucursal. | `views/fichero_view.py`, `controllers/fichero_controller.py` |
+| Etiquetas y fichas | PDF de cotas de lomo con dimensiones ajustables y ficha catalográfica individual en cuadrícula de 2×2, cuatro fichas por página Letter. | `views/etiquetas_view.py`, `controllers/etiqueta_controller.py`, `services/pdf_service.py` |
+| Distribución | Envíos `ENV-AAAAMMDD-NNN`, validación de destino y estado, ubicación/movimientos, Control de Envío SNBP, Nota de Entrega editable y mini-ficha PDF. | `views/distribucion_view.py`, `controllers/distribucion_controller.py` |
 | Ubicación | Búsqueda, actualización de biblioteca/sala/estante y consulta del historial de movimientos. | `views/ubicacion_view.py`, `controllers/ubicacion_controller.py` |
-| Reportes | Resúmenes e inventarios en PDF/Excel; matriz anual de sucursales por áreas Dewey; exportación de tablas; respaldo de base. | `views/reportes_view.py`, `controllers/reportes_controller.py` |
+| Reportes | Resúmenes e inventarios PDF/Excel; matriz anual por biblioteca/área Dewey; exportación integral exclusivamente administrativa; respaldo SQLite con comprobación de integridad. | `views/reportes_view.py`, `controllers/reportes_controller.py` |
+| Auditoría | Registra inicios de sesión, cambios de clave, acciones de administración, exportaciones y respaldos. | `database/models.py`, `services/audit_service.py` |
 | Usuarios | Creación, actualización, activación/desactivación y control por rol. | `views/usuarios_view.py`, `controllers/auth_controller.py` |
 | Sucursales | Alta, consulta y desactivación, protegiendo la biblioteca central. | `views/bibliotecas_view.py`, `controllers/biblioteca_controller.py` |
+
+### Formatos de salida institucional
+
+| Documento | Módulo | Diseño y fuentes de datos |
+|---|---|---|
+| Control de Envío al Sistema Nacional de Bibliotecas Públicas | Distribución | PDF Letter vertical; libros vinculados al bulto, procedencia, volúmenes y precios opcionales; indica cuando datos incompletos limitan los totales. |
+| Nota de Entrega | Distribución | PDF Letter vertical; completa sucursal, dirección, municipio, fecha y volúmenes del envío; operador verifica nombre y cédula de quien recibe antes de generar. |
+| Matriz de Control por Sucursales | Fichero | PDF Letter vertical; una fila por sucursal, marcas de ingreso/disponibilidad/préstamo basadas en estado y ubicación vigente. |
+| Ficha Catalográfica Individual | Etiquetas y Fichas | PDF Letter vertical; cuadrícula 2×2 (cuatro fichas exactas por página) y líneas punteadas para recorte; la ciudad queda para completar si no está en el modelo. |
+| Resumen de Distribución por Áreas de Conocimiento | Reportes | PDF Letter horizontal, separado en páginas para legibilidad; títulos y volúmenes por biblioteca/rango Dewey. |
+| Cotas y mini-ficha | Etiquetas / Distribución | PDF con tamaño de etiqueta configurable y ficha breve del envío. |
+
+La matriz de áreas aproxima Biografías mediante Dewey 920–929 y Publicaciones Periódicas con 050–059. Publicaciones Oficiales y No Bibliográfico requieren clasificación en el modelo y no deben inferirse por el nombre o contenido de un título. Los logotipos institucionales no están incorporados como recursos gráficos en el repositorio; se imprime membrete de texto. La aprobación institucional y prueba física de formatos continúan pendientes.
 
 ## 3. Arquitectura y punto de entrada
 
@@ -60,7 +74,7 @@ flowchart TB
 - `database/db_manager.py` crea el motor SQLite, activa las claves foráneas por conexión, crea tablas e inicializa datos base. Su administrador de sesión confirma al salir sin error y revierte ante excepción.
 - `database/models.py` declara las entidades SQLAlchemy y las relaciones.
 - `services/` contiene creación de PDF, hojas Excel, mini-fichas y respaldo SQLite.
-- `web_preview.py` proporciona el servidor de la interfaz web con `ThreadingHTTPServer`; por omisión se utiliza loopback en la ejecución de desarrollo.
+- `web_preview.py` proporciona el servidor de demostración/consulta con `ThreadingHTTPServer`; el CLI usa loopback por defecto. Sin `--demo`, los endpoints de escritura se deniegan.
 - `views/main_view.py`, `models/libro_model.py` y partes de `controllers/libro_controller.py` contienen funcionalidad heredada Tkinter/SQLite. No son la ruta principal iniciada por `main.py`; deben tratarse como código legado y no como fuente de la operación actual.
 
 ## 4. Tecnologías y requisitos
@@ -96,7 +110,7 @@ En Windows se activa con `.venv\\Scripts\\activate`.
 python web_preview.py --demo --port 8766
 ```
 
-Abrir `http://127.0.0.1:8766`. La base de demostración está en una ruta temporal diferente a la base de operación. El servidor permite escritura en esa base de demostración aislada. Sin `--demo`, tanto el servidor lanzado desde `main.py` como el servidor CLI pueden operar sobre la base indicada y aceptan escrituras autenticadas; no debe usarse como modo de sólo lectura hasta corregir el control.
+Abrir `http://127.0.0.1:8766`. La base de demostración está en una ruta temporal diferente a la base de operación y sólo afecta esa base. Sin `--demo`, el servidor permite consultas autenticadas y rechaza escrituras con HTTP 403, excepto cambiar contraseña; logout también sigue disponible. No utilizarlo desde redes compartidas: el servidor de prueba no cifra el tráfico.
 
 ### Ubicación predeterminada
 
@@ -104,7 +118,7 @@ Abrir `http://127.0.0.1:8766`. La base de demostración está en una ruta tempor
 
 ### Inicio inicial
 
-`DatabaseManager.initialize()` crea tablas, ejecuta el ajuste de esquema existente e inicializa una biblioteca central y la cuenta `admin`. Las credenciales iniciales se publican en `README.md` y el primer ingreso está marcado para cambio obligatorio. Debe completarse ese cambio antes de usar la instalación con datos reales. Véanse los hallazgos F-01 y F-02 en `INFORME_AUDITORIA_SISTEMA.md`.
+`DatabaseManager.initialize()` crea tablas (incluida `auditoria_log`), ejecuta ajustes de esquema existentes e inicializa una biblioteca central y la cuenta `admin`. La credencial bootstrap es conocida y se requiere cambiarla en el primer ingreso. Debe completarse ese cambio y no reutilizar la clave inicial antes de cargar datos reales.
 
 ## 6. Roles y autorización observada
 
@@ -113,9 +127,9 @@ Abrir `http://127.0.0.1:8766`. La base de demostración está en una ruta tempor
 | Administrador | Operación general; administración de usuarios y sucursales. |
 | Bibliotecario | Recepción, catalogación, inventario, etiquetas, ubicación, distribución y reportes. |
 
-La administración de usuarios valida en `AuthController` que el solicitante exista, esté activo y tenga rol administrador. La administración de sucursales y usuarios también comprueba el rol en la API web. El acceso a las vistas de Usuarios y Sucursales se oculta para bibliotecarios.
+La administración de usuarios valida en `AuthController` que el solicitante exista, esté activo, tenga rol administrador y no tenga pendiente cambio obligatorio de clave. La administración de sucursales y usuarios también comprueba el rol en la API web. El acceso a las vistas de Usuarios y Sucursales se oculta para bibliotecarios.
 
-**Reserva de seguridad:** la obligatoriedad del primer cambio de contraseña se verifica en las interfaces, pero no está impuesta por `AuthController.autenticar` ni por todas las rutas de la API. Una llamada directa a la API puede obtener una sesión mientras `debe_cambiar_clave` sigue activo. El servidor web tampoco está diseñado como servicio web multiusuario endurecido; revisar F-02 y F-04.
+**Control y reserva:** las operaciones API verifican nuevamente que el usuario siga activo y que haya completado el cambio obligatorio; una sesión ya emitida pierde acceso a las operaciones protegidas si se vuelve a marcar el cambio. El servidor web sigue siendo una vista de prueba, sin TLS ni vencimiento/rotación de sesiones.
 
 ## 7. Flujo y reglas de negocio
 
@@ -134,13 +148,13 @@ La generación automática de cota, añadida al controlador central y conectada 
 - Cutter basado en el personaje biografiado, primer autor o primera palabra del título si es anónimo o se indican cuatro o más autores. El formulario permite introducir el número de autores para separar nombres de apellidos ambiguos.
 - Año obligatorio, volumen/tomo opcional y generación de `ej.2` o posterior ante una cota coincidente. El campo final sigue editable.
 
-**Limitación bibliotecológica:** el código Cutter usado actualmente es una heurística determinista basada en la suma de caracteres del apellido. No consulta una tabla autorizada Cutter-Sanborn ni garantiza una asignación normativa BNV. La nacionalidad, dimensiones, sección, género, personaje biografiado y tomo que se capturan para la generación no se guardan como campos bibliográficos separados; sólo persiste la cota resultante. Es necesaria validación profesional y ver F-05.
+**Limitación bibliotecológica:** el código Cutter usado actualmente es una heurística determinista basada en la suma de caracteres del apellido. No consulta una tabla autorizada Cutter-Sanborn ni garantiza una asignación normativa BNV. La nacionalidad, dimensiones, sección, género, personaje biografiado y tomo que se capturan para la generación no se guardan como campos bibliográficos separados; sólo persiste la cota resultante. Es necesaria validación profesional y ver A-05.
 
 ### Distribución, ubicación e historial
 
 La distribución exige una sucursal activa, IDs no repetidos y libros existentes catalogados. Dentro de una sesión se crea un envío con código secuencial diario, se asocia a sus libros, cambia el estado a distribuido y se registran ubicaciones y movimientos. Los cambios posteriores de ubicación agregan eventos al historial.
 
-Los eventos de libros permiten reconstruir fases operativas, pero no equivalen a un registro de auditoría integral: no registran inicio de sesión, consulta/exportación, cambios administrativos de usuario, ni valores anteriores y nuevos de todos los campos. Ver F-06.
+Los eventos de libros permiten reconstruir fases operativas. La bitácora `auditoria_log` cubre login correcto/incorrecto, cambios de clave, acciones administrativas, exportaciones y respaldos; no registra cada consulta ni el antes/después de todos los cambios bibliográficos. Ver hallazgo A-07 en `INFORME_AUDITORIA_SISTEMA.md`.
 
 ## 8. Modelo de datos
 
@@ -157,8 +171,9 @@ Las entidades declaradas en `database/models.py` son:
 | `bulto_libros` | Relaciones entre envío y libro. | Claves foráneas con restricciones de borrado. |
 | `movimientos` | Libro, tipo, fecha, origen/destino, usuario y detalle. | Historial operacional asociado al libro. |
 | `usuarios` | Usuario, hash, salt, nombre, rol, estado, cambio requerido y fecha de alta. | Usuario único y rol restringido a `admin`/`bibliotecario`. |
+| `auditoria_log` | Fecha/hora local del host, usuario opcional, acción, origen y detalle. | Clave foránea `SET NULL`; restringe acciones a login, cambio de clave, exportación, respaldo y acciones administrativas. No está diseñada como bitácora inmutable. |
 
-SQLite no cifra por sí mismo la base ni los respaldos. El sistema no incluye un control de versiones de esquema; el cambio conocido se aplica con inspección de columnas y `ALTER TABLE`. Ver F-07.
+SQLite no cifra por sí mismo la base ni los respaldos. El sistema no incluye migraciones versionadas; los ajustes existentes se aplican con inspección de columnas y `ALTER TABLE`. La tabla de auditoría se crea con `create_all` al inicializar la base.
 
 ## 9. Controles técnicos existentes
 
@@ -169,37 +184,40 @@ SQLite no cifra por sí mismo la base ni los respaldos. El sistema no incluye un
 - Autorización administrativa centralizada para gestionar cuentas.
 - Restricciones SQLAlchemy/SQLite y claves foráneas activadas en conexiones.
 - Sesiones SQLAlchemy con commit y rollback ante excepciones.
-- La cookie de sesión web se establece `HttpOnly` y `SameSite=Strict`.
+- La cookie de sesión web se establece `HttpOnly` y `SameSite=Strict`; agrega `Secure` con configuración de producción.
 - La interfaz web escapa texto al renderizar contenido textual en tablas y usa una base aislada para la demostración.
-- El servidor web predeterminado se usa en loopback desde los puntos de entrada documentados.
+- El cambio obligatorio de contraseña se vuelve a verificar en las rutas web protegidas; las escrituras sólo se permiten en la base de demostración.
+- `auditoria_log` registra inicios de sesión, cambios de clave, acciones administrativas, exportaciones y respaldos.
 
-Estos controles reducen riesgos, pero no sustituyen autorización de cada operación sensible, cifrado de datos, seguridad de red ni auditoría completa. La cookie no tiene `Secure`, expiración ni renovación; si el servidor se enlaza a una interfaz de red, el tráfico HTTP no está cifrado. Ver F-04.
+Estos controles reducen riesgos, pero no sustituyen autorización de cada operación sensible, cifrado de datos, seguridad de red ni auditoría completa. El servidor web de prueba no implementa TLS ni expiración/renovación de sesión; `Secure` debe habilitarse detrás de HTTPS antes de cualquier uso en producción. Mantenerlo en loopback; ver A-04.
 
 ## 10. Exportaciones y respaldos
 
 - Excel de inventario y reportes se construye con openpyxl.
-- Existe exportación de todas las tablas reflejadas del esquema. Incluye `usuarios`, con `password_hash` y `salt`; en escritorio la acción está en una vista de reportes común a ambos roles. Ver F-01.
-- Los valores de usuario se escriben directamente en celdas Excel. Una entrada iniciada por `=` se interpreta como fórmula por openpyxl/Excel; ver F-03.
+- La exportación integral de tablas requiere autorización administrativa; `password_hash` y `salt` se excluyen tanto de hojas Excel como de tablas PDF. Ver A-01.
+- Los textos Excel que comienzan por `=`, `+`, `-` o `@` tras espacios/control inicial se neutralizan y se fuerzan a tipo texto. Ver A-03.
 - Los PDF incluyen cotas, fichas, reportes y documentos de envío.
-- `BackupService` usa la API de backup SQLite, guarda archivos locales sin cifrar y rota los siete más recientes.
+- `BackupService` usa la API de backup SQLite, valida `PRAGMA integrity_check`, guarda archivos locales sin cifrar y rota los siete más recientes.
 - La aplicación intenta crear backup al cierre y ofrece creación manual.
-- Las pruebas verifican integridad SQLite (`PRAGMA integrity_check`) en una copia creada y la rotación; no se encontró un flujo de restauración operativa probado ni política externa/inmutable.
+- La bitácora guarda eventos de autenticación, cambio de contraseña, administración de cuentas/sucursales, exportación y respaldo; no se guarda material de autenticación.
+- Una prueba automatizada restaura una copia a otro archivo temporal, valida integridad y relaciones y vuelve a abrirla con SQLAlchemy. La aplicación de escritorio no ofrece todavía un asistente de restauración; no hay política institucional de copia externa/inmutable.
 
 ## 11. Pruebas y estado de verificación
 
-Pruebas encontradas y recolectadas con pytest: **18 casos**.
+Pruebas encontradas y recolectadas con pytest: **24 casos**.
 
 | Archivo | Cobertura principal |
 |---|---|
-| `tests/test_database_architecture.py` | Esquema, datos iniciales, claves foráneas y migraciones de clasificación, precio/volúmenes y municipio. |
+| `tests/test_database_architecture.py` | Esquema y datos iniciales, clave foránea de auditoría, claves foráneas generales y migraciones de clasificación, precio/volúmenes y municipio. |
 | `tests/test_recepcion_mvc.py` | Recepción, validación, corrección y respaldo de la implementación MVC previa. |
 | `tests/test_services_and_branches.py` | PDF, Excel, backup/rotación y gestión de sucursales. |
 | `tests/test_system_workflow.py` | Flujo de recepción a distribución, movimientos, reportes y reglas de generación de cota. |
 | `tests/test_operational_readiness.py` | Catálogo sintético aislado, umbral de búsqueda, PDF paginado, restauración SQLite y API web con cambio inicial de clave/logout. |
+| `tests/test_international_audit.py` | Bloqueo por cambio de clave, exportación XLSX/PDF sin secretos y protegida contra fórmulas, claves foráneas, auditoría y validación del respaldo. |
 
-La suite ampliada se ejecuta con `pytest -q`; sus datos se crean en rutas temporales y no modifican la base institucional. La prueba de restauración abre el respaldo en un archivo SQLite nuevo y vuelve a inicializarlo con SQLAlchemy. La prueba de catálogo mide una búsqueda contra 300 registros sintéticos con objetivo local menor a dos segundos y genera un PDF tabular con 300 filas; el tiempo es una referencia de este entorno, no una garantía para los equipos de destino.
+La suite ampliada se ejecuta con `pytest -v`; las pruebas usan rutas temporales y no modifican la base institucional. La prueba de restauración abre el respaldo en un archivo SQLite nuevo y vuelve a inicializarlo con SQLAlchemy. La prueba de catálogo mide una búsqueda contra 300 registros sintéticos con objetivo local menor a dos segundos y genera un PDF tabular con 300 filas; el tiempo es una referencia de este entorno, no una garantía para los equipos de destino. El respaldo valida automáticamente `PRAGMA integrity_check` antes de reportar éxito.
 
-La inspección confirma pruebas automatizadas de unidad/flujo y recuperación aislada, pero no métricas de cobertura, pipeline CI, pruebas de carga en equipos finales, pruebas de penetración, instalación productiva, pruebas de aceptación institucional ni validación física de impresión. La inicialización visual de Qt tampoco se valida en este entorno porque falta la biblioteca de sistema `libGL.so.1`; no se modificó ni se intentó instalar software en el equipo productivo.
+La inspección confirma pruebas automatizadas de unidad/flujo, recuperación aislada y controles de exportación/autorización, pero no métricas de cobertura, pipeline CI, pruebas de carga en equipos finales, pruebas de penetración, instalación productiva, pruebas de aceptación institucional ni validación física de impresión. La inicialización visual de Qt tampoco se valida en este entorno porque falta la biblioteca de sistema `libGL.so.1`; no se modificó ni se intentó instalar software en el equipo productivo.
 
 ## 12. Plan de pruebas previo a la puesta en funcionamiento
 
@@ -238,22 +256,25 @@ Para autorizar el uso en la Biblioteca Central se recomienda superar pruebas aut
 6. Procedimiento establecido para respaldo, recuperación, soporte y reporte de errores.
 7. Formatos y datos que aún no existen en el modelo aprobados por la institución.
 
-Este plan es una recomendación técnica, no una certificación ni garantía de cumplimiento normativo. Se recomienda iniciar con un piloto de datos controlados y un grupo pequeño de usuarios, mantener respaldada la base y acordar cómo volver al procedimiento anterior si surge un problema. Además, antes de operar con datos sensibles, deben atenderse los hallazgos abiertos del `INFORME_AUDITORIA_SISTEMA.md`, en especial los relativos a exposición de credenciales y autorización.
+Este plan es una recomendación técnica, no una certificación ni garantía de cumplimiento normativo. Se recomienda iniciar con un piloto de datos controlados y un grupo pequeño de usuarios, mantener respaldada la base y acordar cómo volver al procedimiento anterior si surge un problema. Antes de operar con datos sensibles, atiende los riesgos residuales descritos en `INFORME_AUDITORIA_SISTEMA.md`, incluyendo credencial bootstrap conocida, web sin TLS/expiración de sesiones y controles institucionales de custodia.
 
 ## 13. Operación segura recomendada
 
 1. Instalar y ejecutar con una cuenta del sistema operativo dedicada, con acceso de escritura sólo a la carpeta de datos.
-2. Cambiar la contraseña inicial antes de cargar datos reales y no difundirla fuera del procedimiento inicial.
+2. Cambiar la contraseña inicial `admin123` antes de cargar datos reales y no difundirla fuera del procedimiento inicial.
 3. Mantener la vista web en `127.0.0.1`; no usar `--host 0.0.0.0` ni exponer el puerto en una red sin TLS, autenticación reforzada y control operativo.
-4. Restringir exportaciones y respaldos a personal autorizado; tratar XLSX y archivos `.db` como datos sensibles.
-5. Mantener copias adicionales cifradas y separadas del dispositivo de trabajo, con restauraciones de prueba documentadas.
-6. Probar una actualización sobre copia de base antes de aplicar cambios a producción.
-7. Revisar y validar manualmente cada cota generada, en particular Cutter y clasificación temática.
+4. Configurar `BLIBLIOTECA_ENV=production` sólo tras colocar HTTPS delante del servidor para emitir cookie `Secure`; esta opción no proporciona TLS por sí misma.
+5. Restringir exportaciones y respaldos a personal autorizado; tratar XLSX y archivos `.db` como datos sensibles.
+6. Mantener copias adicionales cifradas y separadas del dispositivo de trabajo, con restauraciones de prueba documentadas.
+7. Probar una actualización sobre copia de base antes de aplicarla a producción.
+8. Revisar y validar manualmente cada cota generada, en particular Cutter y clasificación temática.
 
 ## 14. Referencias internas
 
 - [README.md](README.md): instalación, primer acceso, ejecución, módulos y empaquetado.
 - [DESCRIPCION_PROYECTO.md](DESCRIPCION_PROYECTO.md): descripción del proyecto y objetivos.
-- [TODO.md](TODO.md): tareas de publicación pendientes.
+- [TODO.md](TODO.md): tareas de publicación pendientes y aceptación.
 - [requirements.txt](requirements.txt): dependencias declaradas.
 - [INFORME_AUDITORIA_SISTEMA.md](INFORME_AUDITORIA_SISTEMA.md): hallazgos, severidad y plan de remediación.
+- [REPORTE_TECNICO_AUDITORIA_OWASP_ISO.md](REPORTE_TECNICO_AUDITORIA_OWASP_ISO.md): cambios verificados, inventario de archivos, resultados de pruebas y límites de alineación.
+- `views/manual_view.py`: manual integrado en la aplicación de escritorio.

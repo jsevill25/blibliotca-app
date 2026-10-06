@@ -22,6 +22,13 @@ class BackupService:
             destino = None
             origen.close()
             origen = None
+            verificacion = sqlite3.connect(ruta)
+            try:
+                resultado_integridad = verificacion.execute("PRAGMA integrity_check").fetchone()
+            finally:
+                verificacion.close()
+            if resultado_integridad is None or resultado_integridad[0] != "ok":
+                raise sqlite3.DatabaseError("El respaldo generado no superó PRAGMA integrity_check.")
             copias = sorted(self.backup_dir.glob("biblioteca_*.db"), key=lambda item: item.stat().st_mtime, reverse=True)
             for antigua in copias[self.max_backups:]:
                 antigua.unlink()

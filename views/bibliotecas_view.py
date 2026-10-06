@@ -7,9 +7,10 @@ from controllers.biblioteca_controller import BibliotecaController
 class BibliotecasView(QWidget):
     actualizadas = Signal()
 
-    def __init__(self, controller: BibliotecaController):
+    def __init__(self, controller: BibliotecaController, usuario_id: int | None = None):
         super().__init__()
         self.controller = controller
+        self.usuario_id = usuario_id
         layout = QVBoxLayout(self)
         titulo = QLabel("Bibliotecas sucursales")
         titulo.setObjectName("pageTitle")
@@ -54,6 +55,7 @@ class BibliotecasView(QWidget):
         exito, mensaje = self.controller.crear(
             self.nombre.text(), self.direccion.text(), self.encargado.text(),
             self.telefono.text(), self.email.text(), self.municipio.text(),
+            usuario_id=self.usuario_id, origen="escritorio",
         )
         (QMessageBox.information if exito else QMessageBox.warning)(self, "Bibliotecas", mensaje)
         if exito:
@@ -66,7 +68,9 @@ class BibliotecasView(QWidget):
         fila = self.tabla.currentRow()
         if fila < 0:
             return
-        exito, mensaje = self.controller.desactivar(int(self.tabla.item(fila, 0).text()))
+        exito, mensaje = self.controller.desactivar(
+            int(self.tabla.item(fila, 0).text()), self.usuario_id, "escritorio",
+        )
         (QMessageBox.information if exito else QMessageBox.warning)(self, "Bibliotecas", mensaje)
         self.refrescar()
         if exito:

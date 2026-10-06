@@ -162,3 +162,22 @@ class Movement(Base):
     detalle: Mapped[str] = mapped_column(Text, default="")
 
     libro: Mapped[Book] = relationship(back_populates="movimientos")
+
+
+class AuditoriaLog(Base):
+    __tablename__ = "auditoria_log"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    fecha_hora: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, nullable=False, index=True)
+    usuario_id: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id", ondelete="SET NULL"), index=True)
+    accion: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    origen: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+    detalle: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+    __table_args__ = (
+        CheckConstraint(
+            "accion IN ('LOGIN_EXITOSO', 'LOGIN_FALLIDO', 'CAMBIO_CLAVE', "
+            "'EXPORTACION_DATOS', 'RESPALDO_DB', 'ACCION_ADMIN')",
+            name="ck_auditoria_accion",
+        ),
+    )

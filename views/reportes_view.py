@@ -1,21 +1,31 @@
+from pathlib import Path
+
 from PySide6.QtCore import QDate
 from PySide6.QtWidgets import QDateEdit, QFileDialog, QFormLayout, QHBoxLayout, QLabel, QMessageBox, QPushButton, QVBoxLayout, QWidget
 
 from controllers.backup_controller import BackupController
 from controllers.reportes_controller import ReportesController
 from controllers.ubicacion_controller import UbicacionController
+from database.db_manager import DatabaseManager
+from services.audit_service import AuditService
 from services.excel_service import ExcelService
 from services.pdf_service import PDFService
 
 
 class ReportesView(QWidget):
-    def __init__(self, reportes: ReportesController, ubicacion: UbicacionController, backup: BackupController, engine, can_export_all: bool = False):
+    def __init__(
+        self, reportes: ReportesController, ubicacion: UbicacionController,
+        backup: BackupController, engine, can_export_all: bool = False,
+        database: DatabaseManager | None = None, usuario_id: int | None = None,
+    ):
         super().__init__()
         self.reportes = reportes
         self.ubicacion = ubicacion
         self.backup = backup
         self.engine = engine
         self.can_export_all = can_export_all
+        self.database = database
+        self.usuario_id = usuario_id
         self.excel = ExcelService()
         self.pdf = PDFService()
         layout = QVBoxLayout(self)
@@ -54,6 +64,13 @@ class ReportesView(QWidget):
     def _rango(self):
         return self.desde.date().toPython(), self.hasta.date().toPython()
 
+    def _auditar_exportacion(self, ruta: str, formato: str) -> None:
+        if self.database is not None:
+            AuditService(self.database).registrar(
+                "EXPORTACION_DATOS", self.usuario_id, "escritorio",
+                f"Generó exportación {formato}: '{Path(ruta).name}'.",
+            )
+
     def actualizar(self, *_args) -> None:
         inicio, fin = self._rango()
         datos = self.reportes.resumen(inicio, fin)
@@ -89,6 +106,7 @@ class ReportesView(QWidget):
                     for biblioteca, tipo, sala, estante, cantidad in resumen["ubicaciones"]
                 ],
             }, ruta)
+            self._auditar_exportacion(ruta, "Excel de inventario")
             QMessageBox.information(self, "Excel", f"Archivo generado:\n{ruta}")
         except Exception as error:
             QMessageBox.critical(self, "Excel", str(error))
@@ -114,6 +132,7 @@ class ReportesView(QWidget):
                     for fila in filas
                 ]),
             ], ruta)
+            self._auditar_exportacion(ruta, "PDF de inventario")
             QMessageBox.information(self, "PDF", f"Archivo generado:\n{ruta}")
         except Exception as error:
             QMessageBox.critical(self, "PDF", str(error))
@@ -128,6 +147,7 @@ class ReportesView(QWidget):
             self.pdf.generar_reporte("Respaldo completo del inventario", [
                 ("Todos los libros activos", columnas, [[fila.get(columna, "") for columna in columnas] for fila in filas]),
             ], ruta)
+            self._auditar_exportacion(ruta, "PDF de respaldo de inventario")
             QMessageBox.information(self, "PDF", f"Respaldo generado:\n{ruta}")
         except Exception as error:
             QMessageBox.critical(self, "PDF", str(error))
@@ -144,6 +164,7 @@ class ReportesView(QWidget):
         try:
             datos = self.reportes.resumen_distribucion_areas()
             self.pdf.generar_resumen_distribucion_bibliotecas(datos, ruta)
+            self._auditar_exportacion(ruta, "PDF matricial")
             QMessageBox.information(self, "PDF", f"Resumen matricial generado:\n{ruta}")
         except Exception as error:
             QMessageBox.critical(self, "PDF", str(error))
@@ -156,13 +177,14 @@ class ReportesView(QWidget):
         if not ruta:
             return
         try:
-            self.excel.exportar_base_datos(self.engine, ruta)
+            self.excel.exportar_base_datos(self.engine, ruta, administrador=self.can_export_all)
+            self._auditar_exportacion(ruta, "Excel integral administrativo")
             QMessageBox.information(self, "Excel", f"Todas las tablas fueron exportadas:\n{ruta}")
         except Exception as error:
             QMessageBox.critical(self, "Excel", str(error))
 
     def crear_backup(self) -> None:
-        exito, resultado = self.backup.crear_backup()
+        exito, resultado = self.backup.crear_backup(self.usuario_id, "escritorio")
         if exito:
             QMessageBox.information(self, "Backup", f"Respaldo creado:\n{resultado}")
         else:

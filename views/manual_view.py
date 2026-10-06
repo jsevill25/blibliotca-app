@@ -76,9 +76,10 @@ class ManualView(QWidget):
         """)
         self._agregar_tema("Primer acceso", [
             "1. Inicie sesión con la cuenta asignada. En la primera ejecución, la cuenta inicial es admin / admin123.",
-            "2. Cambie la contraseña inicial cuando el sistema lo solicite. Use una contraseña de al menos 10 caracteres.",
+            "2. Cambie la contraseña inicial conocida cuando el sistema lo solicite. Use una contraseña de al menos 10 caracteres y no comparta la clave inicial.",
             "3. La pestaña Manual de uso abre primero. Para volver en cualquier momento, selecciónela o use Ayuda > Abrir manual.",
             "4. El administrador ve además Usuarios y Sucursales. El bibliotecario trabaja con los módulos operativos.",
+            "5. La vista web es de prueba local. Use --demo para practicar con datos aislados; fuera de ese modo, las operaciones de escritura web se bloquean.",
         ])
         self._agregar_tema("Recepción", [
             "1. Abra Recepción y complete el título; es obligatorio. ISBN, autor, editorial, edición, año, páginas e idioma complementan el registro. Precio unitario (Bs.) y número de volúmenes son opcionales.",
@@ -108,12 +109,13 @@ class ManualView(QWidget):
             "6. Registre el municipio de la sucursal en Bibliotecas para que aparezca automáticamente en la Nota de Entrega.",
         ])
         self._agregar_tema("Fichero e inventario", [
-            "Seleccione un solo libro catalogado y pulse Generar matriz de control por sucursales para exportar la ficha institucional anual.",
+            "Busque libros catalogados y seleccione un solo libro para generar la Matriz de Control por Sucursales.",
             "La matriz indica I (Ingreso), D (Disponibilidad) y P (Préstamo) según la ubicación más reciente y el estado del libro registrados en el sistema.",
+            "En Etiquetas y Fichas, las fichas catalográficas individuales se organizan cuatro por página Carta; revise escala, márgenes y guías al imprimir.",
         ])
         self._agregar_tema("Reportes", [
             "Use Resumen de distribución por áreas de conocimiento para generar la matriz anual por biblioteca y municipio, con títulos y volúmenes por rangos Dewey.",
-            "La matriz toma la ubicación más reciente de cada libro; revise la nota del PDF para conocer categorías especiales que la base de datos aún no identifica.",
+            "La matriz toma la ubicación más reciente de cada libro; biografías y publicaciones periódicas se aproximan por rangos Dewey. No se asignan publicaciones oficiales ni materiales no bibliográficos si no están clasificados en los datos.",
         ])
         self._agregar_tema("Ubicación e historial", [
             "1. Busque por título, autor, ISBN, cota o número de registro; combine estado, biblioteca, tipo, sala y estante.",
@@ -124,8 +126,10 @@ class ManualView(QWidget):
         self._agregar_tema("Reportes y respaldos", [
             "1. Defina las fechas Desde/Hasta y actualice el resumen para consultar recepción, catalogación y distribución del período.",
             "2. Exporte el reporte periódico a PDF o Excel. El Excel incluye hojas por inventario, recepción, catalogación, distribución y ubicación.",
-            "3. Exportar todas las tablas crea una hoja por tabla de la base. Respaldo completo PDF genera el inventario completo.",
-            "4. Crear backup ahora copia la base SQLite. Al cerrar la aplicación también se genera un respaldo y se conservan los siete más recientes.",
+            "3. Exportar todas las tablas está reservado al administrador y omite hashes y sales de usuarios. Los textos que podrían convertirse en fórmulas se exportan como texto.",
+            "4. Crear backup ahora copia la base SQLite y comprueba su integridad. Al cerrar la aplicación también se intenta crear un respaldo; se conservan los siete más recientes.",
+            "5. Los eventos de acceso, cambios de contraseña, administración, exportaciones y respaldos quedan registrados en la bitácora. No contiene contraseñas ni tokens y no reemplaza un procedimiento institucional de auditoría.",
+            "6. Los respaldos no están cifrados ni sustituyen copias externas. Verifique la copia y coordine su custodia antes de usar datos reales.",
         ])
         self._agregar_tema("Usuarios y sucursales (admin)", [
             "1. En Usuarios, cree cuentas con rol bibliotecario o admin. Para editar, seleccione una fila, corrija los datos y pulse Guardar cambios.",

@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 import secrets
 import tempfile
 import webbrowser
@@ -24,6 +25,7 @@ from controllers.ubicacion_controller import UbicacionController
 from database.db_manager import DatabaseManager
 from database.models import Book, Cataloging, Library, Package, User
 from services.excel_service import ExcelService
+from services.audit_service import AuditService
 from services.pdf_service import PDFService
 
 
@@ -99,7 +101,7 @@ class PreviewHandler(BaseHTTPRequestHandler):
             if user is None:
                 self._send_json({"error": "Inicie sesión para continuar."}, 401)
                 return
-            if user.debe_cambiar_clave:
+            if not AuthController(self.database).acceso_operativo_permitido(user.id):
                 self._send_json({"error": "Cambie su contraseña antes de utilizar el sistema."}, 403)
                 return
         controller = FicheroController(self.database)
@@ -200,6 +202,7 @@ class PreviewHandler(BaseHTTPRequestHandler):
             if ruta == "/api/login":
                 valido, resultado = AuthController(self.database).autenticar(
                     str(datos.get("username", "")), str(datos.get("password", "")),
+                    origen=self.client_address[0],
                 )
                 if not valido:
                     self._send_json({"error": str(resultado)}, 401)
@@ -208,8 +211,9 @@ class PreviewHandler(BaseHTTPRequestHandler):
                 self.session_store[token] = resultado.id
                 payload = self._user_payload(resultado)
                 payload["demo"] = self.demo_mode
+                cookie = self._session_cookie(token)
                 self._send_json(payload, extra_headers=[(
-                    "Set-Cookie", f"bliblioteca_session={token}; HttpOnly; SameSite=Strict; Path=/",
+                    "Set-Cookie", cookie,
                 )])
                 return
             if ruta == "/api/logout":
@@ -217,7 +221,7 @@ class PreviewHandler(BaseHTTPRequestHandler):
                 if token:
                     self.session_store.pop(token, None)
                 self._send_json({"ok": True}, extra_headers=[(
-                    "Set-Cookie", "bliblioteca_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0",
+                    "Set-Cookie", self._session_cookie("", expired=True),
                 )])
                 return
             current_user = self._current_user()
@@ -227,14 +231,24 @@ class PreviewHandler(BaseHTTPRequestHandler):
                     return
                 exito, mensaje = AuthController(self.database).cambiar_clave(
                     current_user.id, str(datos.get("actual", "")), str(datos.get("nueva", "")),
+                    origen=self.client_address[0],
                 )
                 self._send_json({"ok": exito, "message": mensaje}, 200 if exito else 400)
                 return
             if current_user is None:
                 self._send_json({"error": "Inicie sesión para continuar."}, 401)
                 return
-            if current_user.debe_cambiar_clave:
+            if not AuthController(self.database).acceso_operativo_permitido(current_user.id):
                 self._send_json({"error": "Cambie su contraseña antes de utilizar el sistema."}, 403)
+                return
+            if not self.demo_mode and ruta in {
+                "/api/recepcion", "/api/catalogacion", "/api/distribucion",
+                "/api/ubicacion", "/api/libraries", "/api/users",
+            }:
+                self._send_json(
+                    {"error": "Las operaciones de escritura sólo están habilitadas en modo demostración."},
+                    403,
+                )
                 return
             usuario_id = current_user.id
             if ruta == "/api/fichas":
@@ -304,7 +318,9 @@ class PreviewHandler(BaseHTTPRequestHandler):
                 self._download_file(lambda destino: self._create_report_excel(inicio, fin, destino), "reporte_bibliotecario.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
                 return
             if ruta == "/api/backup":
-                ok, message = BackupController(self.database, Path(self.database.database_path).parent / "backups").crear_backup()
+                ok, message = BackupController(
+                    self.database, Path(self.database.database_path).parent / "backups",
+                ).crear_backup(usuario_id, self.client_address[0])
                 self._send_json({"ok": ok, "message": message}, 200 if ok else 500)
                 return
             if ruta == "/api/libraries":
@@ -315,6 +331,7 @@ class PreviewHandler(BaseHTTPRequestHandler):
                     str(datos.get("nombre", "")), str(datos.get("direccion", "")),
                     str(datos.get("encargado", "")), str(datos.get("telefono", "")),
                     str(datos.get("email", "")),
+                    usuario_id=usuario_id, origen=self.client_address[0],
                 )
                 self._send_json({"ok": exito, "message": mensaje}, 200 if exito else 400)
                 return
@@ -324,7 +341,8 @@ class PreviewHandler(BaseHTTPRequestHandler):
                     return
                 exito, mensaje = AuthController(self.database).crear_usuario(
                     str(datos.get("username", "")), str(datos.get("nombre", "")),
-                    str(datos.get("password", "")), str(datos.get("rol", "bibliotecario")), usuario_id,
+                    str(datos.get("password", "")), str(datos.get("rol", "bibliotecario")),
+                    usuario_id, self.client_address[0],
                 )
                 self._send_json({"ok": exito, "message": mensaje}, 200 if exito else 400)
                 return
@@ -340,17 +358,26 @@ class PreviewHandler(BaseHTTPRequestHandler):
             if current_user is None:
                 self._send_json({"error": "Inicie sesión para continuar."}, 401)
                 return
-            if current_user.debe_cambiar_clave:
+            if not AuthController(self.database).acceso_operativo_permitido(current_user.id):
                 self._send_json({"error": "Cambie su contraseña antes de utilizar el sistema."}, 403)
+                return
+            if not self.demo_mode:
+                self._send_json(
+                    {"error": "Las operaciones de escritura sólo están habilitadas en modo demostración."},
+                    403,
+                )
                 return
             if current_user.rol != "admin":
                 self._send_json({"error": "Esta operación requiere rol administrador."}, 403)
                 return
             if ruta == "/api/libraries":
-                exito, mensaje = BibliotecaController(self.database).desactivar(int(datos.get("id", 0)))
+                exito, mensaje = BibliotecaController(self.database).desactivar(
+                    int(datos.get("id", 0)), current_user.id, self.client_address[0],
+                )
             elif ruta == "/api/users":
                 exito, mensaje = AuthController(self.database).cambiar_estado_usuario(
-                    int(datos.get("id", 0)), bool(datos.get("activo")), current_user.id,
+                    int(datos.get("id", 0)), bool(datos.get("activo")),
+                    current_user.id, self.client_address[0],
                 )
             else:
                 self.send_error(404, "Recurso no encontrado")
@@ -406,6 +433,20 @@ class PreviewHandler(BaseHTTPRequestHandler):
         morsel = cookies.get("bliblioteca_session")
         return morsel.value if morsel else None
 
+    @staticmethod
+    def _session_cookie(token: str, expired: bool = False) -> str:
+        atributos = ["HttpOnly", "SameSite=Strict", "Path=/"]
+        entorno = os.getenv("BLIBLIOTECA_ENV", os.getenv("APP_ENV", "")).casefold()
+        cookie_segura = (
+            entorno in {"production", "prod"}
+            or os.getenv("BLIBLIOTECA_COOKIE_SECURE", "").casefold() in {"1", "true", "yes"}
+        )
+        if cookie_segura:
+            atributos.append("Secure")
+        if expired:
+            atributos.append("Max-Age=0")
+        return f"bliblioteca_session={token}; " + "; ".join(atributos)
+
     def _current_user(self) -> User | None:
         token = self._session_token()
         user_id = self.session_store.get(token) if token else None
@@ -452,6 +493,12 @@ class PreviewHandler(BaseHTTPRequestHandler):
             ruta = Path(archivo.name)
         try:
             create(ruta)
+            user = self._current_user()
+            if user is not None:
+                AuditService(self.database).registrar(
+                    "EXPORTACION_DATOS", user.id, self.client_address[0],
+                    f"Descargó '{filename}' desde {urlparse(self.path).path}.",
+                )
             self._send_bytes(ruta.read_bytes(), content_type, attachment=filename)
         finally:
             ruta.unlink(missing_ok=True)

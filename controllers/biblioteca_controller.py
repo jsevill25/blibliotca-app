@@ -2,6 +2,7 @@ from sqlalchemy import select
 
 from database.db_manager import DatabaseManager
 from database.models import Library
+from services.audit_service import AuditService
 
 
 class BibliotecaController:
@@ -15,7 +16,11 @@ class BibliotecaController:
                 query = query.where(Library.activa.is_(True))
             return list(session.scalars(query))
 
-    def crear(self, nombre: str, direccion: str = "", encargado: str = "", telefono: str = "", email: str = "", municipio: str = "") -> tuple[bool, str]:
+    def crear(
+        self, nombre: str, direccion: str = "", encargado: str = "",
+        telefono: str = "", email: str = "", municipio: str = "",
+        usuario_id: int | None = None, origen: str = "aplicacion",
+    ) -> tuple[bool, str]:
         nombre = nombre.strip()
         if not nombre or nombre == "Biblioteca Central Rómulo Gallegos":
             return False, "Indique un nombre válido para la sucursal."
@@ -26,9 +31,15 @@ class BibliotecaController:
                 nombre=nombre, direccion=direccion.strip(), municipio=municipio.strip(),
                 encargado=encargado.strip(), telefono=telefono.strip(), email=email.strip(),
             ))
+            AuditService.agregar(
+                session, "ACCION_ADMIN", usuario_id, origen,
+                f"Registró la sucursal '{nombre}'.",
+            )
         return True, "Sucursal registrada."
 
-    def desactivar(self, library_id: int) -> tuple[bool, str]:
+    def desactivar(
+        self, library_id: int, usuario_id: int | None = None, origen: str = "aplicacion",
+    ) -> tuple[bool, str]:
         with self.database.session() as session:
             library = session.get(Library, library_id)
             if library is None:
@@ -36,4 +47,8 @@ class BibliotecaController:
             if library.nombre == "Biblioteca Central Rómulo Gallegos":
                 return False, "La biblioteca central no se puede desactivar."
             library.activa = False
+            AuditService.agregar(
+                session, "ACCION_ADMIN", usuario_id, origen,
+                f"Desactivó la sucursal '{library.nombre}' (id {library.id}).",
+            )
         return True, "Biblioteca desactivada."
