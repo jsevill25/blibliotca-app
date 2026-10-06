@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QFileDialog, QComboBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton, QTableWidget, QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QDialog, QDialogButtonBox, QFileDialog, QComboBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton, QTableWidget, QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget
 
 from controllers.distribucion_controller import DistribucionController
 from controllers.etiqueta_controller import EtiquetaController
@@ -44,10 +44,26 @@ class DistribucionView(QWidget):
         actualizar.clicked.connect(self.refrescar)
         actualizar_sucursales = QPushButton("Actualizar sucursales")
         actualizar_sucursales.clicked.connect(self._cargar_destinos)
+        self.codigo_consulta = QLineEdit()
+        self.codigo_consulta.setPlaceholderText("Código ENV-AAAAMMDD-NNN")
+        consultar_envio = QPushButton("Consultar envío y generar control")
+        consultar_envio.clicked.connect(self.consultar_envio)
+        self.envios_combo = QComboBox()
+        self.envios_combo.setMinimumWidth(280)
+        actualizar_envios = QPushButton("Actualizar envíos")
+        actualizar_envios.clicked.connect(self.actualizar_envios)
+        nota_entrega = QPushButton("Nota de entrega del envío seleccionado")
+        nota_entrega.clicked.connect(self.nota_entrega_seleccionada)
         acciones.addWidget(enviar)
+        acciones.addWidget(self.codigo_consulta)
+        acciones.addWidget(consultar_envio)
+        acciones.addWidget(self.envios_combo)
+        acciones.addWidget(nota_entrega)
+        acciones.addWidget(actualizar_envios)
         acciones.addWidget(actualizar)
         acciones.addWidget(actualizar_sucursales)
         layout.addLayout(acciones)
+        self.actualizar_envios()
         self.refrescar()
 
     def refrescar(self, *_args) -> None:
@@ -81,8 +97,9 @@ class DistribucionView(QWidget):
             QMessageBox.warning(self, "Distribución", mensaje)
             return
         QMessageBox.information(self, "Envío creado", f"Código de envío: {mensaje}")
-        if QMessageBox.question(self, "Documentos de envío", "¿Desea generar el documento de envío y la mini-ficha para la caja?") == QMessageBox.StandardButton.Yes:
+        if QMessageBox.question(self, "Documentos de envío", "¿Desea generar el control institucional de envío y la mini-ficha para la caja?") == QMessageBox.StandardButton.Yes:
             self.exportar_documentos(mensaje)
+        self.actualizar_envios(mensaje)
         self.refrescar()
 
     def exportar_documentos(self, codigo: str) -> None:
@@ -95,10 +112,76 @@ class DistribucionView(QWidget):
         if not ruta:
             return
         try:
-            self.etiquetas.exportar_envio(bulto, libros, ruta)
+            self.etiquetas.exportar_control_envio(bulto, libros, ruta)
             ruta_mini, _ = QFileDialog.getSaveFileName(self, "Guardar mini-ficha", f"{codigo}_caja.pdf", "PDF (*.pdf)")
             if ruta_mini:
                 self.etiquetas.exportar_mini_ficha(bulto, ruta_mini)
             QMessageBox.information(self, "Documentos", "Documentos generados correctamente.")
         except Exception as error:
             QMessageBox.critical(self, "Documentos", str(error))
+
+    def consultar_envio(self) -> None:
+        codigo = self.codigo_consulta.text().strip()
+        if not codigo:
+            QMessageBox.warning(self, "Envío", "Escriba el código del envío que desea consultar.")
+            return
+        self.exportar_documentos(codigo)
+
+    def actualizar_envios(self, codigo_seleccionado: str = "") -> None:
+        envios = self.controller.listar_envios()
+        self.envios_combo.clear()
+        for envio in envios:
+            texto = f"{envio['codigo_envio']} · {envio['destino']} · {envio['fecha']}"
+            self.envios_combo.addItem(texto, envio["codigo_envio"])
+        if codigo_seleccionado:
+            indice = self.envios_combo.findData(codigo_seleccionado)
+            if indice >= 0:
+                self.envios_combo.setCurrentIndex(indice)
+
+    def nota_entrega_seleccionada(self) -> None:
+        codigo = self.envios_combo.currentData()
+        if not codigo:
+            QMessageBox.warning(self, "Nota de entrega", "Seleccione un envío de la lista.")
+            return
+        datos = self.controller.obtener_envio(str(codigo))
+        if datos is None:
+            QMessageBox.warning(self, "Nota de entrega", "No se encontró el envío seleccionado.")
+            self.actualizar_envios()
+            return
+        bulto, _libros = datos
+        dialogo = QDialog(self)
+        dialogo.setWindowTitle("Verificar datos de recepción")
+        formulario = QFormLayout(dialogo)
+        formulario.addRow("Sucursal", QLabel(bulto.get("destino") or "No registrada"))
+        formulario.addRow("Dirección", QLabel(bulto.get("direccion") or "No registrada"))
+        formulario.addRow("Municipio", QLabel(bulto.get("municipio") or "No registrado"))
+        formulario.addRow("Volúmenes", QLabel(str(bulto.get("cantidad_volumenes", 0))))
+        formulario.addRow("Fecha del envío", QLabel(bulto.get("fecha") or ""))
+        nombre = QLineEdit(bulto.get("encargada") or "")
+        cedula = QLineEdit()
+        cedula.setPlaceholderText("Cédula exacta de quien recibe")
+        formulario.addRow("Nombre de quien recibe *", nombre)
+        formulario.addRow("Cédula de Identidad *", cedula)
+        botones = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
+        )
+        botones.accepted.connect(dialogo.accept)
+        botones.rejected.connect(dialogo.reject)
+        formulario.addRow(botones)
+        if dialogo.exec() != QDialog.DialogCode.Accepted:
+            return
+        if not nombre.text().strip() or not cedula.text().strip():
+            QMessageBox.warning(self, "Nota de entrega", "Complete el nombre y la cédula de quien recibe.")
+            return
+        ruta, _ = QFileDialog.getSaveFileName(
+            self, "Guardar Nota de Entrega", f"{codigo}_nota_entrega.pdf", "PDF (*.pdf)",
+        )
+        if not ruta:
+            return
+        try:
+            self.etiquetas.exportar_nota_entrega(
+                bulto, {"nombre": nombre.text(), "cedula": cedula.text()}, ruta,
+            )
+            QMessageBox.information(self, "Nota de entrega", "La Nota de Entrega se generó correctamente.")
+        except Exception as error:
+            QMessageBox.critical(self, "Nota de entrega", str(error))

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPushButton, QStackedWidget, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPushButton, QScrollArea, QStackedWidget, QVBoxLayout, QWidget
 
 from config import APP_NAME
 from controllers.auth_controller import AuthController
@@ -8,6 +8,8 @@ from controllers.backup_controller import BackupController
 from controllers.biblioteca_controller import BibliotecaController
 from controllers.catalogacion_controller import CatalogacionController
 from controllers.distribucion_controller import DistribucionController
+from controllers.etiqueta_controller import EtiquetaController
+from controllers.fichero_controller import FicheroController
 from controllers.recepcion_controller import RecepcionController
 from controllers.reportes_controller import ReportesController
 from controllers.ubicacion_controller import UbicacionController
@@ -17,6 +19,7 @@ from views.catalogacion_view import CatalogacionView
 from views.bibliotecas_view import BibliotecasView
 from views.distribucion_view import DistribucionView
 from views.etiquetas_view import EtiquetasView
+from views.fichero_view import FicheroView
 from views.manual_view import ManualView
 from views.recepcion_view import RecepcionView
 from views.reportes_view import ReportesView
@@ -41,13 +44,18 @@ class MainWindow(QMainWindow):
         root_layout.setSpacing(0)
         self.setCentralWidget(central)
 
+        sidebar_scroll = QScrollArea()
+        sidebar_scroll.setObjectName("sidebarScroll")
+        sidebar_scroll.setWidgetResizable(True)
+        sidebar_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        sidebar_scroll.setFixedWidth(240)
         sidebar = QFrame()
         sidebar.setObjectName("sidebar")
-        sidebar.setFixedWidth(240)
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(12, 18, 12, 14)
         sidebar_layout.setSpacing(6)
-        root_layout.addWidget(sidebar)
+        sidebar_scroll.setWidget(sidebar)
+        root_layout.addWidget(sidebar_scroll)
 
         brand = QLabel("BIBLIOTECA CENTRAL")
         brand.setObjectName("sidebarBrand")
@@ -70,11 +78,20 @@ class MainWindow(QMainWindow):
         ubicacion = UbicacionController(database)
         self._add_page("Recepción", RecepcionView(recepcion, user.id), sidebar_layout)
         self._add_page("Catalogación", CatalogacionView(catalogacion, user.id), sidebar_layout)
+        etiquetas = EtiquetaController()
+        self._add_page("Fichero e inventario", FicheroView(FicheroController(database), etiquetas), sidebar_layout)
         distribucion = DistribucionView(DistribucionController(database), user.id)
         self._add_page("Distribución", distribucion, sidebar_layout)
         self._add_page("Ubicación y búsqueda", UbicacionView(ubicacion, user.id), sidebar_layout)
-        self._add_page("Etiquetas", EtiquetasView(ubicacion, __import__("controllers.etiqueta_controller", fromlist=["EtiquetaController"]).EtiquetaController()), sidebar_layout)
-        self._add_page("Reportes y backup", ReportesView(ReportesController(database), ubicacion, self.backup, database.engine), sidebar_layout)
+        self._add_page("Etiquetas de lomo", EtiquetasView(ubicacion, etiquetas), sidebar_layout)
+        self._add_page(
+            "Reportes y backup",
+            ReportesView(
+                ReportesController(database), ubicacion, self.backup, database.engine,
+                can_export_all=user.rol == "admin",
+            ),
+            sidebar_layout,
+        )
         if user.rol == "admin":
             self._add_page("Usuarios", UsuariosView(AuthController(database), user.id), sidebar_layout)
             bibliotecas = BibliotecasView(BibliotecaController(database))
@@ -90,12 +107,19 @@ class MainWindow(QMainWindow):
 
     def _add_page(self, title: str, view: QWidget, sidebar_layout: QVBoxLayout) -> None:
         view.setObjectName("moduleView")
+        scroll = QScrollArea()
+        scroll.setObjectName("pageScroll")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
         card = QFrame()
         card.setObjectName("contentCard")
+        card.setMinimumWidth(0)
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(18, 16, 18, 16)
+        card_layout.setSizeConstraint(QVBoxLayout.SizeConstraint.SetMinimumSize)
         card_layout.addWidget(view)
-        self.pages.addWidget(card)
+        scroll.setWidget(card)
+        self.pages.addWidget(scroll)
 
         button = QPushButton(title)
         button.setObjectName("sidebarNav")

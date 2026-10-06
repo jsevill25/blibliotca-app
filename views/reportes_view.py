@@ -9,12 +9,13 @@ from services.pdf_service import PDFService
 
 
 class ReportesView(QWidget):
-    def __init__(self, reportes: ReportesController, ubicacion: UbicacionController, backup: BackupController, engine):
+    def __init__(self, reportes: ReportesController, ubicacion: UbicacionController, backup: BackupController, engine, can_export_all: bool = False):
         super().__init__()
         self.reportes = reportes
         self.ubicacion = ubicacion
         self.backup = backup
         self.engine = engine
+        self.can_export_all = can_export_all
         self.excel = ExcelService()
         self.pdf = PDFService()
         layout = QVBoxLayout(self)
@@ -36,10 +37,13 @@ class ReportesView(QWidget):
         filas_botones = (
             (("Actualizar resumen", self.actualizar), ("Exportar inventario Excel", self.exportar_excel), ("Exportar inventario PDF", self.exportar_pdf)),
             (("Exportar todas las tablas", self.exportar_todas_tablas), ("Respaldo completo PDF", self.exportar_respaldo_pdf), ("Crear backup ahora", self.crear_backup)),
+            (("Resumen de distribución por áreas de conocimiento", self.exportar_matriz_areas),),
         )
         for botones in filas_botones:
             acciones = QHBoxLayout()
             for texto, callback in botones:
+                if texto == "Exportar todas las tablas" and not self.can_export_all:
+                    continue
                 boton = QPushButton(texto)
                 boton.clicked.connect(callback)
                 acciones.addWidget(boton)
@@ -128,7 +132,26 @@ class ReportesView(QWidget):
         except Exception as error:
             QMessageBox.critical(self, "PDF", str(error))
 
+    def exportar_matriz_areas(self) -> None:
+        ruta, _ = QFileDialog.getSaveFileName(
+            self,
+            "Exportar resumen matricial por áreas de conocimiento",
+            "resumen_distribucion_bibliotecas.pdf",
+            "PDF (*.pdf)",
+        )
+        if not ruta:
+            return
+        try:
+            datos = self.reportes.resumen_distribucion_areas()
+            self.pdf.generar_resumen_distribucion_bibliotecas(datos, ruta)
+            QMessageBox.information(self, "PDF", f"Resumen matricial generado:\n{ruta}")
+        except Exception as error:
+            QMessageBox.critical(self, "PDF", str(error))
+
     def exportar_todas_tablas(self) -> None:
+        if not self.can_export_all:
+            QMessageBox.warning(self, "Permisos", "La exportación integral requiere rol administrador.")
+            return
         ruta, _ = QFileDialog.getSaveFileName(self, "Exportar todas las tablas", "respaldo_completo.xlsx", "Excel (*.xlsx)")
         if not ruta:
             return

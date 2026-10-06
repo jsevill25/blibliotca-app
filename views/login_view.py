@@ -1,4 +1,5 @@
-from PySide6.QtWidgets import QDialog, QFormLayout, QLineEdit, QMessageBox, QPushButton, QVBoxLayout, QLabel
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QDialog, QFormLayout, QFrame, QLineEdit, QMessageBox, QPushButton, QVBoxLayout, QLabel
 
 from config import APP_NAME
 from controllers.auth_controller import AuthController
@@ -11,15 +12,32 @@ class LoginView(QDialog):
         self.controller = controller
         self.current_user = None
         self.setWindowTitle(f"Iniciar sesión | {APP_NAME}")
-        self.setMinimumWidth(390)
+        self.setMinimumWidth(440)
         apply_theme(self)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 24, 24, 24)
+        panel = QFrame()
+        panel.setObjectName("loginPanel")
+        panel_layout = QVBoxLayout(panel)
+        panel_layout.setContentsMargins(24, 22, 24, 22)
+        panel_layout.setSpacing(12)
+
+        brand = QLabel("B")
+        brand.setObjectName("loginMark")
+        brand.setFixedSize(42, 42)
+        brand.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        panel_layout.addWidget(brand)
+
         title = QLabel("Biblioteca Central\nRómulo Gallegos")
         title.setObjectName("pageTitle")
-        layout.addWidget(title)
-        layout.addWidget(QLabel("Acceso al sistema bibliotecario"))
+        panel_layout.addWidget(title)
+        subtitle = QLabel("Acceso al sistema bibliotecario")
+        subtitle.setObjectName("muted")
+        panel_layout.addWidget(subtitle)
+
         form = QFormLayout()
+        form.setSpacing(10)
         self.username = QLineEdit()
         self.username.setPlaceholderText("Nombre de usuario")
         self.password = QLineEdit()
@@ -28,10 +46,13 @@ class LoginView(QDialog):
         self.password.returnPressed.connect(self.submit)
         form.addRow("Usuario", self.username)
         form.addRow("Contraseña", self.password)
-        layout.addLayout(form)
+        panel_layout.addLayout(form)
+
         button = QPushButton("Iniciar sesión")
         button.clicked.connect(self.submit)
-        layout.addWidget(button)
+        panel_layout.addWidget(button)
+        layout.addWidget(panel)
+        self.username.setFocus()
 
     def submit(self) -> None:
         valido, resultado = self.controller.autenticar(self.username.text(), self.password.text())

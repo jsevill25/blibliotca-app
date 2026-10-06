@@ -15,14 +15,17 @@ class BibliotecaController:
                 query = query.where(Library.activa.is_(True))
             return list(session.scalars(query))
 
-    def crear(self, nombre: str, direccion: str = "", encargado: str = "", telefono: str = "", email: str = "") -> tuple[bool, str]:
+    def crear(self, nombre: str, direccion: str = "", encargado: str = "", telefono: str = "", email: str = "", municipio: str = "") -> tuple[bool, str]:
         nombre = nombre.strip()
         if not nombre or nombre == "Biblioteca Central Rómulo Gallegos":
             return False, "Indique un nombre válido para la sucursal."
         with self.database.session() as session:
             if session.scalar(select(Library.id).where(Library.nombre == nombre)):
                 return False, "Ya existe una biblioteca con ese nombre."
-            session.add(Library(nombre=nombre, direccion=direccion.strip(), encargado=encargado.strip(), telefono=telefono.strip(), email=email.strip()))
+            session.add(Library(
+                nombre=nombre, direccion=direccion.strip(), municipio=municipio.strip(),
+                encargado=encargado.strip(), telefono=telefono.strip(), email=email.strip(),
+            ))
         return True, "Sucursal registrada."
 
     def desactivar(self, library_id: int) -> tuple[bool, str]:

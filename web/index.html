@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#20251f">
+  <title>Sistema bibliotecario | Biblioteca Central Rómulo Gallegos</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main id="web-gate" class="web-gate">
+    <section id="web-login-panel" class="web-login-panel">
+      <span class="web-login-mark" aria-hidden="true">B</span>
+      <p class="eyebrow">BIBLIOTECA CENTRAL</p>
+      <h1>Rómulo Gallegos</h1>
+      <p class="intro">Acceso al sistema bibliotecario</p>
+      <form id="web-login-form" class="gate-form">
+        <label>Usuario<input name="username" autocomplete="username" required></label>
+        <label>Contraseña<input name="password" type="password" autocomplete="current-password" required></label>
+        <p id="login-error" class="gate-error" role="alert"></p>
+        <button class="primary-button" type="submit">Iniciar sesión</button>
+      </form>
+    </section>
+    <section id="web-password-panel" class="web-login-panel" hidden>
+      <span class="web-login-mark" aria-hidden="true">B</span>
+      <p class="eyebrow">SEGURIDAD DE LA CUENTA</p>
+      <h1>Cambie su contraseña</h1>
+      <p class="intro">Este cambio es obligatorio para continuar.</p>
+      <form id="web-password-form" class="gate-form">
+        <label>Contraseña actual<input name="actual" type="password" autocomplete="current-password" required></label>
+        <label>Nueva contraseña<input name="nueva" type="password" autocomplete="new-password" minlength="10" required></label>
+        <label>Repita la contraseña<input name="confirmacion" type="password" autocomplete="new-password" minlength="10" required></label>
+        <p id="password-error" class="gate-error" role="alert"></p>
+        <button class="primary-button" type="submit">Actualizar contraseña</button>
+      </form>
+    </section>
+  </main>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#inicio" aria-label="Biblioteca Central, inicio">
+        <span class="brand-mark" aria-hidden="true">B</span>
+        <span><strong>Biblioteca Central</strong><small>Rómulo Gallegos</small></span>
+      </a>
+      <p class="nav-caption">SISTEMA BIBLIOTECARIO</p>
+      <nav class="nav-links" aria-label="Secciones">
+        <button class="nav-link active" type="button" data-screen="manual"><span class="nav-icon">00</span> Manual de uso</button>
+        <button class="nav-link" type="button" data-screen="recepcion"><span class="nav-icon">01</span> Recepción</button>
+        <button class="nav-link" type="button" data-screen="catalogacion"><span class="nav-icon">02</span> Catalogación</button>
+        <button class="nav-link" type="button" data-screen="fichero"><span class="nav-icon">03</span> Fichero e inventario</button>
+        <button class="nav-link" type="button" data-screen="distribucion"><span class="nav-icon">04</span> Distribución</button>
+        <button class="nav-link" type="button" data-screen="ubicacion"><span class="nav-icon">05</span> Ubicación y búsqueda</button>
+        <button class="nav-link" type="button" data-screen="etiquetas"><span class="nav-icon">06</span> Etiquetas de lomo</button>
+        <button class="nav-link" type="button" data-screen="reportes"><span class="nav-icon">07</span> Reportes y backup</button>
+        <button class="nav-link admin-link" type="button" data-screen="sucursales"><span class="nav-icon">08</span> Sucursales</button>
+        <button class="nav-link admin-link" type="button" data-screen="usuarios"><span class="nav-icon">09</span> Usuarios</button>
+      </nav>
+      <div class="sidebar-note">
+        <span class="note-dot"></span>
+        <div><strong>Registro central</strong><small id="sidebar-total">Conectando con la base…</small></div>
+      </div>
+      <div class="sidebar-bottom">CATÁLOGO DIGITAL <span>LOCAL</span></div>
+    </aside>
+
+    <main id="inicio" class="main-area">
+      <header class="topbar">
+        <div class="breadcrumbs">Biblioteca <span>/</span> <span id="current-module">Manual de uso</span></div>
+        <div class="topbar-meta"><span id="mode-badge" class="mode-badge">Sistema conectado</span><span id="web-user-name" class="user-name"></span><button id="logout-button" class="quiet-button" type="button">Cerrar sesión</button></div>
+      </header>
+
+      <div class="content">
+        <section id="screen-manual" class="screen active-screen">
+          <section class="page-heading"><div><p class="eyebrow">SISTEMA DE GESTIÓN BIBLIOTECARIA</p><h1>Manual de usuario</h1><p class="intro">Recorrido de los procesos disponibles en la aplicación.</p></div><span id="web-session-notice" class="demo-notice"></span></section>
+          <div class="workflow-strip" aria-label="Flujo de trabajo bibliotecario">
+            <div><b>01</b><strong>Recepción</strong><span>Ingreso y procedencia</span></div><i>→</i><div><b>02</b><strong>Catalogación</strong><span>Clasificación y cota</span></div><i>→</i><div><b>03</b><strong>Fichero</strong><span>Cédula e inventario</span></div><i>→</i><div><b>04</b><strong>Distribución</strong><span>Envío a sucursales</span></div><i>→</i><div><b>05</b><strong>Seguimiento</strong><span>Ubicación e historial</span></div>
+          </div>
+          <section class="section-block"><div class="section-heading"><div><p class="eyebrow">PANORAMA DE COLECCIÓN</p><h2>Estado actual del registro</h2></div><button class="quiet-button" type="button" data-refresh="dashboard">Actualizar</button></div><div id="dashboard-stats" class="stat-grid"><p class="empty-cell">Cargando resumen…</p></div><div class="module-shortcuts">
+            <button type="button" data-screen="recepcion"><span>01</span><strong>Registrar un ingreso</strong><small>Crear el registro inicial del libro</small></button>
+            <button type="button" data-screen="catalogacion"><span>02</span><strong>Catalogar pendientes</strong><small>Asignar clasificación Dewey o LC</small></button>
+            <button type="button" data-screen="fichero"><span>03</span><strong>Consultar el fichero</strong><small>Buscar cédulas e imprimir fichas</small></button>
+            <button type="button" data-screen="reportes"><span>07</span><strong>Consultar reportes</strong><small>Ver inventario y exportaciones</small></button>
+          </div></section>
+          <p id="demo-disclaimer" class="demo-disclaimer" hidden>Los cambios realizados en esta vista sólo se guardan en la base aislada de demostración.</p>
+        </section>
+
+        <section id="screen-recepcion" class="screen">
+          <div class="page-heading"><div><p class="eyebrow">ETAPA 01 · INGRESO</p><h1>Recepción de libros</h1><p class="intro">Registra la entrada, procedencia y datos bibliográficos iniciales.</p></div></div>
+          <div class="module-grid"><form id="reception-form" class="form-panel"><h2>Registrar ingreso</h2><label>Título *<input name="titulo" required></label><div class="form-row"><label>Autor<input name="autor"></label><label>ISBN<input name="isbn"></label></div><div class="form-row"><label>Editorial<input name="editorial"></label><label>Año<input name="anio" type="number" min="1"></label></div><div class="form-row"><label>Edición<input name="edicion"></label><label>Páginas<input name="paginas" type="number" min="1"></label></div><div class="form-row"><label>Idioma<input name="idioma" value="Español"></label><label>Procedencia<select name="procedencia"><option value="donacion">Donación</option><option value="compra">Compra</option><option value="biblioteca_nacional">Biblioteca Nacional</option></select></label></div><label>Detalle / observaciones<input name="procedencia_detalle"></label><button class="primary-button" type="submit">Registrar libro</button></form><div class="table-frame"><div class="module-toolbar"><h2>Registro de entradas</h2><input id="reception-search" type="search" placeholder="Buscar por título, autor o ISBN"></div><div class="table-scroll"><table><thead><tr><th>REGISTRO</th><th>TÍTULO / AUTOR</th><th>ESTADO</th><th>PROCEDENCIA</th></tr></thead><tbody id="reception-body"><tr><td colspan="4" class="empty-cell">Cargando…</td></tr></tbody></table></div></div></div>
+        </section>
+
+        <section id="screen-catalogacion" class="screen">
+          <div class="page-heading"><div><p class="eyebrow">ETAPA 02 · ORGANIZACIÓN</p><h1>Catalogación pendiente</h1><p class="intro">Selecciona un libro recibido, define su sistema y genera su cota.</p></div><span id="pending-count" class="result-count"></span></div>
+          <div class="module-toolbar"><input id="catalog-search" type="search" placeholder="Buscar título, autor o ISBN"></div>
+          <div class="module-grid"><div class="table-frame"><div class="table-scroll"><table><thead><tr><th></th><th>TÍTULO / AUTOR</th><th>ISBN</th><th>REGISTRO</th></tr></thead><tbody id="catalog-body"><tr><td colspan="4" class="empty-cell">Cargando…</td></tr></tbody></table></div></div><form id="catalog-form" class="form-panel"><h2>Ficha de clasificación</h2><p id="catalog-selected" class="form-hint">Selecciona un libro pendiente.</p><input name="id" type="hidden"><label>Modo de cota<select name="modo_cota"><option value="manual">Manual</option><option value="automatica">Automática</option></select></label><label>Sistema<select name="sistema"><option>Dewey</option><option>LC</option></select></label><label>Código de clasificación<input name="codigo" required placeholder="Ej. 863.6 o PQ"></label><div class="form-row"><label>Cutter<input name="cutter" placeholder="Sugerencia automática"></label><button id="suggest-cutter" class="quiet-button" type="button">Sugerir Cutter</button></div><div class="form-row"><label>Género<select name="genero"><option value="No ficción">No ficción</option><option>Biografía individual</option><option>Biografía colectiva</option><option>Novela</option><option>Poesía</option><option>Teatro</option><option>Ensayo</option></select></label><label>Sección<select name="seccion"><option value="">General</option><option>Referencia</option><option>Infantil</option><option>Juvenil</option></select></label></div><div class="form-row"><label>Número de autores<input name="numero_autores" type="number" min="1" step="1" placeholder="Si aplica"></label><label>Nacionalidad del autor<input name="nacionalidad" placeholder="Venezolana"></label></div><div class="form-row"><label>Tipo de material<select name="material"><option value="">Otro</option><option>Música escrita</option></select></label><label>Alto (cm)<input name="alto" type="number" min="0" step="0.1"></label></div><div class="form-row"><label>Ancho (cm)<input name="ancho" type="number" min="0" step="0.1"></label><label>Personaje biografiado<input name="biografiado"></label></div><div class="form-row"><label>Volumen / tomo<input name="tomo" type="number" min="1"></label><label>Tipo de numeración<select name="tipo_tomo"><option value="v">Volumen (v.)</option><option value="t">Tomo (t.)</option></select></label></div><button id="generate-shelfmark" class="quiet-button" type="button">Generar cota automática</button><label>Cota completa (editable)<textarea name="cota" rows="5" required></textarea></label><button class="primary-button" type="submit">Catalogar libro</button></form></div>
+        </section>
+
+        <section id="screen-fichero" class="screen">
+        <section class="page-heading">
+          <div>
+            <p class="eyebrow">MEMORIA Y CONTROL DE COLECCIÓN</p>
+            <h1>Fichero e inventario</h1>
+            <p class="intro">Consulta las cédulas catalográficas y conoce cómo se distribuye la colección.</p>
+          </div>
+          <div class="date-stamp"><span class="date-mark"></span><span id="today-label">Biblioteca Central</span></div>
+        </section>
+
+        <section class="stat-grid" aria-label="Resumen del registro">
+          <article class="stat-item stat-total"><span class="stat-label">LIBROS REGISTRADOS</span><strong id="stat-total">—</strong><span>Registros activos</span></article>
+          <article class="stat-item stat-catalogued"><span class="stat-label">CATALOGADOS</span><strong id="stat-catalogued">—</strong><span>Con cédula disponible</span></article>
+          <article class="stat-item stat-pending"><span class="stat-label">PENDIENTES</span><strong id="stat-pending">—</strong><span>En proceso de catalogación</span></article>
+        </section>
+
+        <section id="fichero" class="section-block">
+          <div class="section-heading">
+            <div><p class="eyebrow">CATÁLOGO FÍSICO, AHORA DIGITAL</p><h2>Fichero de cédulas</h2></div>
+            <span id="book-count" class="result-count">Cargando registros</span>
+          </div>
+          <div class="toolbar">
+            <label class="search-field"><span class="search-symbol" aria-hidden="true"></span><input id="search" type="search" placeholder="Título, autor, ISBN, cota o registro" autocomplete="off"></label>
+            <div class="selection-tools"><span id="selection-count" class="selection-count">0 seleccionados · mínimo 4</span><button id="print-button" class="primary-button" type="button" disabled><span class="button-glyph" aria-hidden="true">↧</span> Generar cédulas</button></div>
+          </div>
+          <div class="book-layout">
+            <div class="table-frame">
+              <div class="table-scroll"><table>
+                <thead><tr><th class="check-col"><span class="sr-only">Seleccionar</span></th><th>REGISTRO</th><th>TÍTULO / AUTOR</th><th>ÁREA</th><th>COTA</th></tr></thead>
+                <tbody id="books-body"><tr><td colspan="5" class="empty-cell">Cargando el fichero…</td></tr></tbody>
+              </table></div>
+            </div>
+            <aside class="fiche-preview" aria-live="polite">
+              <div class="preview-top"><span class="preview-kicker">CÉDULA DE CONSULTA</span><span class="preview-stamp">FICHA</span></div>
+              <div id="fiche-content" class="fiche-content"><p class="fiche-placeholder">Selecciona un libro para consultar su descripción bibliográfica.</p></div>
+              <div class="preview-foot"><span>Biblioteca Central</span><span id="preview-record">Sin selección</span></div>
+            </aside>
+          </div>
+        </section>
+
+        <section id="inventario" class="section-block inventory-section">
+          <div class="section-heading">
+            <div><p class="eyebrow">EXISTENCIAS POR CLASIFICACIÓN</p><h2>Inventario por áreas y tipos</h2></div>
+            <span class="inventory-total"><strong id="inventory-total">—</strong> registros</span>
+          </div>
+          <div class="inventory-frame">
+            <div class="table-scroll"><table class="inventory-table">
+              <thead><tr><th>ÁREA TEMÁTICA</th><th>SISTEMA</th><th>CATALOGADOS</th><th>PENDIENTES / OTROS</th><th>CANTIDAD</th></tr></thead>
+              <tbody id="inventory-body"><tr><td colspan="5" class="empty-cell">Calculando existencias…</td></tr></tbody>
+            </table></div>
+            <div class="inventory-legend"><span><i class="legend-green"></i> Catalogados</span><span><i class="legend-amber"></i> Pendientes u otros estados</span></div>
+          </div>
+        </section>
+        <footer class="page-footer"><span>Biblioteca Central Rómulo Gallegos</span><span>Fichero digital <b>·</b> Control de colección</span></footer>
+        </section>
+
+        <section id="screen-distribucion" class="screen">
+          <div class="page-heading"><div><p class="eyebrow">ETAPA 04 · CIRCULACIÓN</p><h1>Distribución a sucursales</h1><p class="intro">Selecciona libros catalogados y prepara el documento de envío.</p></div></div>
+          <form id="distribution-form" class="form-panel form-wide"><div class="form-row"><label>Biblioteca destino<select id="distribution-library" name="biblioteca_id" required></select></label><label>Género / tipo<input name="genero" placeholder="Ej. Literatura infantil"></label></div><label>Observaciones<input name="observaciones"></label><div class="module-toolbar"><input id="distribution-search" type="search" placeholder="Buscar libros disponibles"><span id="distribution-selected" class="selection-count">0 seleccionados</span></div><div class="table-frame"><div class="table-scroll"><table><thead><tr><th></th><th>TÍTULO / AUTOR</th><th>COTA</th><th>REGISTRO</th></tr></thead><tbody id="distribution-body"><tr><td colspan="4" class="empty-cell">Cargando…</td></tr></tbody></table></div></div><button class="primary-button" type="submit">Crear envío</button></form>
+          <section class="section-block"><div class="section-heading"><div><p class="eyebrow">TRAZABILIDAD</p><h2>Envíos recientes</h2></div></div><div class="table-frame"><div class="table-scroll"><table><thead><tr><th>CÓDIGO</th><th>DESTINO</th><th>FECHA</th><th>LIBROS</th><th>DOCUMENTO</th></tr></thead><tbody id="shipments-body"><tr><td colspan="5" class="empty-cell">Cargando…</td></tr></tbody></table></div></div></section>
+        </section>
+
+        <section id="screen-ubicacion" class="screen">
+          <div class="page-heading"><div><p class="eyebrow">SEGUIMIENTO DE COLECCIÓN</p><h1>Búsqueda y ubicación</h1><p class="intro">Consulta el estado, la ubicación actual y la trazabilidad de cada libro.</p></div></div>
+          <div class="filter-row"><input id="location-search" type="search" placeholder="Título, autor, ISBN, cota o registro"><select id="location-state"><option value="">Todos los estados</option><option>recibido</option><option>catalogado</option><option>distribuido</option><option>prestado</option></select><button id="location-refresh" class="quiet-button" type="button">Buscar</button></div>
+          <form id="location-form" class="form-inline"><strong>Ubicar seleccionado</strong><input name="id" type="hidden"><select id="location-library" name="biblioteca_id"></select><select name="tipo"><option value="sala">Sala</option><option value="deposito">Depósito</option></select><input name="sala" placeholder="Sala"><input name="estante" placeholder="Estante"><button class="primary-button" type="submit">Guardar ubicación</button><button id="history-button" class="quiet-button" type="button">Ver historial</button></form>
+          <div class="table-frame"><div class="table-scroll"><table><thead><tr><th></th><th>REGISTRO</th><th>TÍTULO</th><th>ESTADO</th><th>BIBLIOTECA</th><th>SALA / ESTANTE</th><th>MOVIMIENTO</th></tr></thead><tbody id="location-body"><tr><td colspan="7" class="empty-cell">Cargando…</td></tr></tbody></table></div></div>
+        </section>
+
+        <section id="screen-etiquetas" class="screen">
+          <div class="page-heading"><div><p class="eyebrow">PREPARACIÓN FÍSICA</p><h1>Etiquetas de lomo</h1><p class="intro">Selecciona los libros y genera cotas PDF con dimensiones de impresión.</p></div></div>
+          <div class="module-toolbar"><input id="labels-search" type="search" placeholder="Buscar libro catalogado"><span id="labels-selected" class="selection-count">0 seleccionados</span><button id="labels-export" class="primary-button" type="button">Exportar cotas PDF</button></div><div class="form-row compact-fields"><label>Ancho (cm)<input id="label-width" type="number" value="1.4" min="0.5" max="10" step="0.1"></label><label>Alto (cm)<input id="label-height" type="number" value="4" min="0.5" max="15" step="0.1"></label></div><div class="table-frame"><div class="table-scroll"><table><thead><tr><th></th><th>REGISTRO</th><th>TÍTULO / AUTOR</th><th>COTA</th></tr></thead><tbody id="labels-body"><tr><td colspan="4" class="empty-cell">Cargando…</td></tr></tbody></table></div></div>
+        </section>
+
+        <section id="screen-reportes" class="screen">
+          <div class="page-heading"><div><p class="eyebrow">CONTROL Y RESPALDO</p><h1>Reportes y backup</h1><p class="intro">Consulta el movimiento de la colección y descarga reportes por período.</p></div></div>
+          <div class="form-inline report-filters"><label>Desde<input id="report-from" type="date"></label><label>Hasta<input id="report-to" type="date"></label><button id="report-refresh" class="quiet-button" type="button">Actualizar resumen</button><button id="report-pdf" class="primary-button" type="button">Exportar PDF</button><button id="report-excel" class="primary-button" type="button">Exportar Excel</button><button id="backup-now" class="quiet-button" type="button">Crear backup</button></div>
+          <div id="report-summary" class="report-summary"><p class="empty-cell">Cargando resumen…</p></div><div class="table-frame"><div class="section-heading table-heading"><h2>Inventario detallado</h2><span id="report-count" class="result-count"></span></div><div class="table-scroll"><table><thead><tr><th>REGISTRO</th><th>TÍTULO / AUTOR</th><th>ESTADO</th><th>COTA</th><th>BIBLIOTECA</th><th>UBICACIÓN</th></tr></thead><tbody id="report-body"><tr><td colspan="6" class="empty-cell">Cargando…</td></tr></tbody></table></div></div>
+        </section>
+
+        <section id="screen-sucursales" class="screen admin-screen">
+          <div class="page-heading"><div><p class="eyebrow">ADMINISTRACIÓN</p><h1>Bibliotecas sucursales</h1><p class="intro">Registra destinos y consulta su información institucional.</p></div></div>
+          <form id="library-form" class="form-panel form-wide"><div class="form-row"><label>Nombre<input name="nombre" required></label><label>Dirección<input name="direccion"></label></div><div class="form-row"><label>Encargado<input name="encargado"></label><label>Teléfono<input name="telefono"></label><label>Correo<input name="email" type="email"></label></div><button class="primary-button" type="submit">Registrar sucursal</button></form>
+          <div class="table-frame"><div class="table-scroll"><table><thead><tr><th>NOMBRE</th><th>DIRECCIÓN</th><th>ENCARGADO</th><th>CONTACTO</th><th>ESTADO</th><th></th></tr></thead><tbody id="libraries-body"><tr><td colspan="6" class="empty-cell">Cargando…</td></tr></tbody></table></div></div>
+        </section>
+
+        <section id="screen-usuarios" class="screen admin-screen">
+          <div class="page-heading"><div><p class="eyebrow">ADMINISTRACIÓN</p><h1>Usuarios del sistema</h1><p class="intro">Gestiona cuentas de administrador y bibliotecario en la base aislada de prueba.</p></div></div>
+          <form id="user-form" class="form-panel form-wide"><div class="form-row"><label>Usuario<input name="username" required></label><label>Nombre completo<input name="nombre"></label><label>Rol<select name="rol"><option value="bibliotecario">Bibliotecario</option><option value="admin">Administrador</option></select></label><label>Contraseña inicial<input name="password" type="password" minlength="10" required></label></div><button class="primary-button" type="submit">Crear usuario</button></form>
+          <div class="table-frame"><div class="table-scroll"><table><thead><tr><th>USUARIO</th><th>NOMBRE</th><th>ROL</th><th>ESTADO</th><th></th></tr></thead><tbody id="users-body"><tr><td colspan="5" class="empty-cell">Cargando…</td></tr></tbody></table></div></div>
+        </section>
+      </div>
+    </main>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="/app.js" defer></script>
+</body>
+</html>

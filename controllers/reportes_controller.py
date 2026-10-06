@@ -1,4 +1,6 @@
 from datetime import date, datetime, time, timedelta
+import re
+import unicodedata
 
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import aliased
@@ -8,8 +10,129 @@ from database.models import Book, Cataloging, Library, Location, Package, packag
 
 
 class ReportesController:
+    AREAS_MATRICIALES = (
+        "000", "100", "200", "300", "400", "500", "600", "700", "800", "900",
+        "Biografías", "Pub. Oficiales", "Pub. Periódicas", "No Bibliográfico",
+    )
+
     def __init__(self, database: DatabaseManager):
         self.database = database
+
+    def resumen_distribucion_areas(self) -> dict:
+        with self.database.session() as session:
+            ultima_ubicacion_id = (
+                select(Location.id)
+                .where(Location.libro_id == Book.id)
+                .order_by(desc(Location.fecha_ubicacion), desc(Location.id))
+                .limit(1)
+                .correlate(Book)
+                .scalar_subquery()
+            )
+            ubicacion_actual = aliased(Location)
+            filas = session.execute(
+                select(Book, Library.nombre)
+                .select_from(Book)
+                .outerjoin(ubicacion_actual, ubicacion_actual.id == ultima_ubicacion_id)
+                .outerjoin(Library, Library.id == ubicacion_actual.biblioteca_id)
+                .where(Book.activo.is_(True))
+                .order_by(Library.nombre, Book.numero_registro)
+            ).all()
+            bibliotecas = list(session.scalars(select(Library).order_by(Library.nombre)))
+
+        def normalizar(nombre: str) -> str:
+            descompuesto = unicodedata.normalize("NFKD", nombre)
+            texto = "".join(caracter for caracter in descompuesto if not unicodedata.combining(caracter)).casefold()
+            if texto.strip().startswith("bic. nat. del libertador"):
+                texto = texto.replace("bic. nat. del libertador", "biblioteca nacional del libertador", 1)
+            return " ".join("".join(caracter if caracter.isalnum() else " " for caracter in texto).split())
+
+        def coincide(nombre_oficial: str, nombre_registrado: str) -> bool:
+            oficial = normalizar(nombre_oficial).split()
+            registrado = normalizar(nombre_registrado).split()
+            return bool(oficial) and len(oficial) <= len(registrado) and any(
+                all(registrado[inicio + indice].startswith(token) for indice, token in enumerate(oficial))
+                for inicio in range(len(registrado) - len(oficial) + 1)
+            )
+
+        from controllers.fichero_controller import FicheroController
+
+        nombres_oficiales = list(FicheroController.BIBLIOTECAS_MATRIZ)
+        bibliotecas_por_nombre = {}
+        for nombre in nombres_oficiales:
+            equivalentes = [registrada for registrada in bibliotecas if coincide(nombre, registrada.nombre)]
+            nombre_visible = "Biblioteca Central 'Rómulo Gallegos'" if normalizar(nombre) == "romulo gallegos" else nombre
+            bibliotecas_por_nombre[nombre_visible] = equivalentes[0] if equivalentes else None
+        for biblioteca in bibliotecas:
+            if not any(coincide(oficial, biblioteca.nombre) for oficial in nombres_oficiales):
+                bibliotecas_por_nombre[biblioteca.nombre] = biblioteca
+        bibliotecas_por_nombre["Sin ubicación"] = None
+
+        acumulados = {}
+        for nombre_visible in bibliotecas_por_nombre:
+            acumulados[nombre_visible] = {
+                area: {"T": 0, "V": 0} for area in self.AREAS_MATRICIALES
+            }
+            acumulados[nombre_visible]["Total"] = {"T": 0, "V": 0}
+            acumulados[nombre_visible]["Total General"] = {"T": 0, "V": 0}
+
+        nombre_actual_a_visible = {
+            biblioteca.nombre: nombre_visible
+            for nombre_visible, biblioteca in bibliotecas_por_nombre.items()
+            if biblioteca is not None
+        }
+        areas_dewey = {f"{numero:03d}" for numero in range(0, 1000, 100)}
+        for libro, biblioteca_actual in filas:
+            sucursal = nombre_actual_a_visible.get(biblioteca_actual or "", "Sin ubicación")
+            dew = re.match(r"^\s*(\d{1,3})(?:\.\d+)?", libro.codigo_dewey or "")
+            numero_dewey = int(dew.group(1)) if dew else None
+            if numero_dewey is None:
+                categoria = None
+            elif 920 <= numero_dewey <= 929:
+                categoria = "Biografías"
+            elif 50 <= numero_dewey <= 59:
+                categoria = "Pub. Periódicas"
+            else:
+                categoria = f"{(numero_dewey // 100) * 100:03d}"
+                if categoria not in self.AREAS_MATRICIALES:
+                    categoria = "No Bibliográfico"
+
+            titulos = 1
+            volumenes = max(libro.numero_volumenes or 1, 1)
+            if categoria is not None:
+                valores = acumulados[sucursal][categoria]
+                valores["T"] += titulos
+                valores["V"] += volumenes
+                if categoria in areas_dewey:
+                    acumulados[sucursal]["Total"]["T"] += titulos
+                    acumulados[sucursal]["Total"]["V"] += volumenes
+            acumulados[sucursal]["Total General"]["T"] += titulos
+            acumulados[sucursal]["Total General"]["V"] += volumenes
+
+        totales_generales = {
+            area: {
+                metrica: sum(datos[area][metrica] for datos in acumulados.values())
+                for metrica in ("T", "V")
+            }
+            for area in (*self.AREAS_MATRICIALES, "Total", "Total General")
+        }
+        return {
+            "anio": date.today().year,
+            "sucursales": [
+                {
+                    "biblioteca": nombre,
+                    "municipio": biblioteca.municipio if biblioteca else "",
+                    "categorias": cantidades,
+                }
+                for nombre, cantidades in acumulados.items()
+                for biblioteca in (bibliotecas_por_nombre[nombre],)
+            ],
+            "totales_generales": totales_generales,
+            "nota_clasificacion": (
+                "Biografías se identifica con Dewey 920-929 y Pub. Periódicas con 050-059. "
+                "La base actual no distingue publicaciones oficiales ni material no bibliográfico; "
+                "los registros sin código Dewey cuentan en Total General, pero no se asignan a esas categorías."
+            ),
+        }
 
     def resumen(self, inicio: date | None = None, fin: date | None = None) -> dict:
         with self.database.session() as session:

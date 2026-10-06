@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
@@ -21,12 +22,18 @@ class RecepcionController:
         try:
             anio = int(datos["anio"]) if datos.get("anio") not in (None, "") else None
             paginas = int(datos["paginas"]) if datos.get("paginas") not in (None, "") else None
-        except (TypeError, ValueError):
-            return False, "Año y páginas deben ser números enteros."
+            numero_volumenes = int(datos["numero_volumenes"]) if datos.get("numero_volumenes") not in (None, "") else None
+            precio_unitario = Decimal(str(datos["precio_unitario"]).strip().replace(",", ".")) if datos.get("precio_unitario") not in (None, "") else None
+        except (TypeError, ValueError, InvalidOperation):
+            return False, "Año, páginas y volúmenes deben ser enteros; el precio debe ser numérico."
         if anio is not None and not 0 < anio <= date.today().year + 1:
             return False, "El año de publicación no es válido."
         if paginas is not None and paginas <= 0:
             return False, "El número de páginas debe ser mayor que cero."
+        if numero_volumenes is not None and numero_volumenes <= 0:
+            return False, "El número de volúmenes debe ser mayor que cero."
+        if precio_unitario is not None and (not precio_unitario.is_finite() or precio_unitario < 0):
+            return False, "El precio unitario debe ser un monto válido mayor o igual a cero."
 
         with self.database.session() as session:
             central = session.scalar(select(Library).where(Library.nombre == "Biblioteca Central Rómulo Gallegos"))
@@ -40,6 +47,7 @@ class RecepcionController:
                 editorial=str(datos.get("editorial", "")).strip(), anio=anio,
                 isbn=str(datos.get("isbn", "")).strip(), edicion=str(datos.get("edicion", "")).strip(),
                 idioma=str(datos.get("idioma", "Español")).strip() or "Español", paginas=paginas,
+                numero_volumenes=numero_volumenes, precio_unitario=precio_unitario,
                 procedencia=procedencia, procedencia_detalle=str(datos.get("procedencia_detalle", "")).strip(),
                 fecha_ingreso=date.today(), numero_registro=f"{prefijo}{secuencia:05d}",
                 observaciones=str(datos.get("observaciones", "")).strip(), estado="recibido",
@@ -87,15 +95,23 @@ class RecepcionController:
             try:
                 anio = int(datos["anio"]) if datos.get("anio") not in (None, "") else None
                 paginas = int(datos["paginas"]) if datos.get("paginas") not in (None, "") else None
-            except (TypeError, ValueError):
-                return False, "Año y páginas deben ser números enteros."
-            libro.anio = anio
-            libro.paginas = paginas
-            libro.procedencia = procedencia
+                numero_volumenes = int(datos["numero_volumenes"]) if datos.get("numero_volumenes") not in (None, "") else None
+                precio_unitario = Decimal(str(datos["precio_unitario"]).strip().replace(",", ".")) if datos.get("precio_unitario") not in (None, "") else None
+            except (TypeError, ValueError, InvalidOperation):
+                return False, "Año, páginas y volúmenes deben ser enteros; el precio debe ser numérico."
             if anio is not None and not 0 < anio <= date.today().year + 1:
                 return False, "El año de publicación no es válido."
             if paginas is not None and paginas <= 0:
                 return False, "El número de páginas debe ser mayor que cero."
+            if numero_volumenes is not None and numero_volumenes <= 0:
+                return False, "El número de volúmenes debe ser mayor que cero."
+            if precio_unitario is not None and (not precio_unitario.is_finite() or precio_unitario < 0):
+                return False, "El precio unitario debe ser un monto válido mayor o igual a cero."
+            libro.anio = anio
+            libro.paginas = paginas
+            libro.numero_volumenes = numero_volumenes
+            libro.precio_unitario = precio_unitario
+            libro.procedencia = procedencia
             for campo in ("titulo", "autor", "editorial", "isbn", "edicion", "idioma", "procedencia_detalle", "observaciones"):
                 if campo in datos:
                     setattr(libro, campo, str(datos[campo]).strip())

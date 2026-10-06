@@ -81,7 +81,7 @@ class ManualView(QWidget):
             "4. El administrador ve además Usuarios y Sucursales. El bibliotecario trabaja con los módulos operativos.",
         ])
         self._agregar_tema("Recepción", [
-            "1. Abra Recepción y complete el título; es obligatorio. ISBN, autor, editorial, edición, año, páginas e idioma complementan el registro.",
+            "1. Abra Recepción y complete el título; es obligatorio. ISBN, autor, editorial, edición, año, páginas e idioma complementan el registro. Precio unitario (Bs.) y número de volúmenes son opcionales.",
             "2. Seleccione Donación, Compra o Biblioteca Nacional. Aparecerán los campos correspondientes al origen.",
             "3. Pulse Registrar / guardar cambios. Se asigna un número REG-AAAA-NNNNN y el libro queda en estado recibido.",
             "4. Busque por título, autor o ISBN; use los filtros de procedencia y fechas para acotar la lista.",
@@ -96,14 +96,24 @@ class ManualView(QWidget):
         self._agregar_tema("Etiquetas y fichas", [
             "1. Actualice la lista de libros catalogados. Seleccione filas concretas o deje la selección vacía para exportar todos.",
             "2. Ajuste ancho y alto de la etiqueta de lomo en centímetros si su papel lo requiere.",
-            "3. Exporte cotas o fichas a PDF y seleccione la ruta. Las fichas se distribuyen cuatro por hoja A4.",
+            "3. Exporte cotas PDF o fichas catalográficas individuales. Las fichas se imprimen cuatro por hoja Carta con guías punteadas de corte; los espacios sobrantes quedan vacíos.",
             "4. Imprima al 100 % de escala; desactive opciones del controlador como Ajustar a página para conservar las medidas.",
         ])
         self._agregar_tema("Distribución", [
             "1. Elija una sucursal activa y, si corresponde, indique género/tipo y observaciones.",
             "2. Busque y seleccione uno o más libros catalogados. Los libros recibidos no se pueden enviar sin catalogar.",
             "3. Pulse Crear envío. Se genera un código ENV-AAAAMMDD-NNN y se registra la ubicación/movimiento.",
-            "4. Confirme la generación de documentos. El PDF de envío incluye copias para archivo central y biblioteca receptora; también puede guardar la mini-ficha de caja.",
+            "4. Confirme para generar el Control de Envío al Sistema Nacional de Bibliotecas Públicas, con totales cuando precio y volúmenes estén registrados; también puede guardar la mini-ficha de caja.",
+            "5. Seleccione un envío de la lista y pulse Nota de entrega. Verifique los datos de sucursal y complete el nombre y la cédula exacta de quien recibe antes de guardar el PDF.",
+            "6. Registre el municipio de la sucursal en Bibliotecas para que aparezca automáticamente en la Nota de Entrega.",
+        ])
+        self._agregar_tema("Fichero e inventario", [
+            "Seleccione un solo libro catalogado y pulse Generar matriz de control por sucursales para exportar la ficha institucional anual.",
+            "La matriz indica I (Ingreso), D (Disponibilidad) y P (Préstamo) según la ubicación más reciente y el estado del libro registrados en el sistema.",
+        ])
+        self._agregar_tema("Reportes", [
+            "Use Resumen de distribución por áreas de conocimiento para generar la matriz anual por biblioteca y municipio, con títulos y volúmenes por rangos Dewey.",
+            "La matriz toma la ubicación más reciente de cada libro; revise la nota del PDF para conocer categorías especiales que la base de datos aún no identifica.",
         ])
         self._agregar_tema("Ubicación e historial", [
             "1. Busque por título, autor, ISBN, cota o número de registro; combine estado, biblioteca, tipo, sala y estante.",

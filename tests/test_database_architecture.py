@@ -48,3 +48,37 @@ def test_database_migrates_cataloging_code_column(tmp_path):
     columns = {column["name"] for column in inspect(database.engine).get_columns("catalogacion")}
     assert "codigo_clasificacion" in columns
     database.close()
+
+
+def test_database_migrates_optional_package_form_fields(tmp_path):
+    path = tmp_path / "older-books.db"
+    with sqlite3.connect(path) as connection:
+        connection.execute("CREATE TABLE libros (id INTEGER PRIMARY KEY, titulo TEXT NOT NULL)")
+
+    database = DatabaseManager(path)
+    database.initialize()
+    columns = {column["name"] for column in inspect(database.engine).get_columns("libros")}
+    assert {"precio_unitario", "numero_volumenes"} <= columns
+    database.close()
+
+
+def test_database_migrates_library_municipality(tmp_path):
+    path = tmp_path / "older-libraries.db"
+    with sqlite3.connect(path) as connection:
+        connection.execute("""
+            CREATE TABLE bibliotecas (
+                id INTEGER PRIMARY KEY,
+                nombre VARCHAR(180) NOT NULL UNIQUE,
+                direccion VARCHAR(240) NOT NULL DEFAULT '',
+                encargado VARCHAR(160) NOT NULL DEFAULT '',
+                telefono VARCHAR(40) NOT NULL DEFAULT '',
+                email VARCHAR(160) NOT NULL DEFAULT '',
+                activa BOOLEAN NOT NULL DEFAULT 1
+            )
+        """)
+
+    database = DatabaseManager(path)
+    database.initialize()
+    columns = {column["name"] for column in inspect(database.engine).get_columns("bibliotecas")}
+    assert "municipio" in columns
+    database.close()

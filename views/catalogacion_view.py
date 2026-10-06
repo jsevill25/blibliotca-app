@@ -29,24 +29,55 @@ class CatalogacionView(QWidget):
         form = QFormLayout()
         self.clasificacion = QComboBox()
         self.clasificacion.addItems(["Dewey", "LC"])
+        self.modo_cota = QComboBox()
+        self.modo_cota.addItems(["Manual", "Automática"])
         self.codigo = QLineEdit()
         self.cutter = QLineEdit()
         self.cota = QTextEdit()
-        self.cota.setMaximumHeight(70)
+        self.cota.setMaximumHeight(110)
+        self.genero = QComboBox()
+        self.genero.addItems(["No ficción", "Biografía individual", "Biografía colectiva", "Novela", "Poesía", "Teatro", "Ensayo"])
+        self.numero_autores = QLineEdit()
+        self.seccion = QComboBox()
+        self.seccion.addItems(["General", "Referencia", "Infantil", "Juvenil"])
+        self.nacionalidad = QLineEdit()
+        self.material = QComboBox()
+        self.material.addItems(["Otro", "Música escrita"])
+        self.alto = QLineEdit()
+        self.ancho = QLineEdit()
+        self.biografiado = QLineEdit()
+        self.tomo = QLineEdit()
+        self.tipo_tomo = QComboBox()
+        self.tipo_tomo.addItems(["v", "t"])
         self.anio_actual = ""
         self.codigo.textChanged.connect(self._refrescar_cota)
         self.cutter.textChanged.connect(self._refrescar_cota)
+        self.modo_cota.currentTextChanged.connect(self._cambio_modo)
+        form.addRow("Modo de cota", self.modo_cota)
         form.addRow("Sistema", self.clasificacion)
         form.addRow("Clasificación", self.codigo)
         form.addRow("Cutter sugerido", self.cutter)
-        form.addRow("Cota completa", self.cota)
+        form.addRow("Género", self.genero)
+        form.addRow("Sección", self.seccion)
+        form.addRow("Número de autores", self.numero_autores)
+        form.addRow("Nacionalidad del autor", self.nacionalidad)
+        form.addRow("Tipo de material", self.material)
+        form.addRow("Alto (cm)", self.alto)
+        form.addRow("Ancho (cm)", self.ancho)
+        form.addRow("Personaje biografiado", self.biografiado)
+        form.addRow("Número de volumen/tomo", self.tomo)
+        form.addRow("Numeración", self.tipo_tomo)
+        form.addRow("Cota completa (editable)", self.cota)
         layout.addLayout(form)
         actions = QHBoxLayout()
         sugerir = QPushButton("Sugerir Cutter")
         sugerir.clicked.connect(self.sugerir)
+        generar = QPushButton("Generar cota automática")
+        generar.clicked.connect(self.generar_cota)
         guardar = QPushButton("Catalogar libro")
         guardar.clicked.connect(self.guardar)
         actions.addWidget(sugerir)
+        actions.addWidget(generar)
         actions.addWidget(guardar)
         layout.addLayout(actions)
         self.refrescar()
@@ -68,8 +99,21 @@ class CatalogacionView(QWidget):
         if libro:
             self.anio_actual = str(libro.anio or "")
             self.codigo.clear()
+            self.genero.setCurrentIndex(0)
+            self.seccion.setCurrentIndex(0)
+            self.numero_autores.clear()
+            self.nacionalidad.clear()
+            self.material.setCurrentIndex(0)
+            self.alto.clear()
+            self.ancho.clear()
+            self.biografiado.clear()
+            self.tomo.clear()
+            self.cota.clear()
             self.cutter.setText(self.controller.sugerir_cutter(libro.autor))
-            self._refrescar_cota()
+            if self.modo_cota.currentText() == "Automática":
+                self.generar_cota()
+            else:
+                self._refrescar_cota()
 
     def sugerir(self) -> None:
         fila = self.tabla.currentRow()
@@ -83,7 +127,31 @@ class CatalogacionView(QWidget):
             self._refrescar_cota()
 
     def _refrescar_cota(self, *_args) -> None:
-        self.actualizar_cota(self.anio_actual)
+        if self.modo_cota.currentText() == "Manual":
+            self.actualizar_cota(self.anio_actual)
+
+    def _cambio_modo(self, modo: str) -> None:
+        if modo == "Automática" and self.libro_id:
+            self.generar_cota()
+
+    def generar_cota(self) -> None:
+        if not self.libro_id:
+            QMessageBox.warning(self, "Catalogación", "Seleccione un libro pendiente.")
+            return
+        try:
+            resultado = self.controller.generar_cota_automatica(self.libro_id, self.codigo.text(), {
+                "genero": self.genero.currentText(), "seccion": self.seccion.currentText(),
+                "numero_autores": self.numero_autores.text(),
+                "nacionalidad": self.nacionalidad.text(), "material": self.material.currentText(),
+                "alto": self.alto.text(), "ancho": self.ancho.text(),
+                "biografiado": self.biografiado.text(), "tomo": self.tomo.text(),
+                "tipo_tomo": self.tipo_tomo.currentText(),
+            })
+        except ValueError as error:
+            QMessageBox.warning(self, "Generación de cota", str(error))
+            return
+        self.cutter.setText(resultado["cutter"])
+        self.cota.setPlainText(resultado["cota"])
 
     def actualizar_cota(self, anio) -> None:
         self.cota.setPlainText("\n".join(part for part in (self.codigo.text().strip(), self.cutter.text().strip(), str(anio or "")) if part))

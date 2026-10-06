@@ -1,6 +1,7 @@
 from datetime import date, datetime
 
 from sqlalchemy import select
+from sqlalchemy.orm import joinedload, selectinload
 
 from database.db_manager import DatabaseManager
 from database.models import Book, Library, Location, Movement, Package
@@ -56,17 +57,51 @@ class DistribucionController:
 
     def obtener_envio(self, codigo: str) -> tuple[dict, list[dict]] | None:
         with self.database.session() as session:
-            paquete = session.scalar(select(Package).where(Package.codigo_envio == codigo))
+            paquete = session.scalar(
+                select(Package)
+                .options(
+                    joinedload(Package.biblioteca_destino),
+                    selectinload(Package.libros).selectinload(Book.recepcion),
+                )
+                .where(Package.codigo_envio == codigo)
+            )
             if paquete is None:
                 return None
             datos_bulto = {
                 "codigo_envio": paquete.codigo_envio,
                 "destino": paquete.biblioteca_destino.nombre,
+                "direccion": paquete.biblioteca_destino.direccion,
+                "municipio": paquete.biblioteca_destino.municipio,
+                "encargada": paquete.biblioteca_destino.encargado,
                 "fecha": paquete.fecha_envio.strftime("%Y-%m-%d %H:%M"),
                 "cantidad_libros": paquete.cantidad_libros,
+                "cantidad_volumenes": sum(libro.numero_volumenes or 1 for libro in paquete.libros),
             }
             libros = [{
                 "titulo": libro.titulo, "autor": libro.autor, "cota": libro.cota,
                 "numero_registro": libro.numero_registro,
+                "organismo": (
+                    libro.recepcion.institucion_origen
+                    or libro.recepcion.proveedor_nombre
+                    or libro.recepcion.donante_nombre
+                    if libro.recepcion else ""
+                ),
+                "procedencia": libro.procedencia,
+                "numero_volumenes": libro.numero_volumenes,
+                "precio_unitario": libro.precio_unitario,
             } for libro in paquete.libros]
             return datos_bulto, libros
+
+    def listar_envios(self, limite: int = 100) -> list[dict]:
+        with self.database.session() as session:
+            paquetes = session.scalars(
+                select(Package)
+                .options(joinedload(Package.biblioteca_destino))
+                .order_by(Package.fecha_envio.desc(), Package.id.desc())
+                .limit(limite)
+            )
+            return [{
+                "codigo_envio": paquete.codigo_envio,
+                "destino": paquete.biblioteca_destino.nombre,
+                "fecha": paquete.fecha_envio.strftime("%d/%m/%Y"),
+            } for paquete in paquetes]

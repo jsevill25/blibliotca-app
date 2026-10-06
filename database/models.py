@@ -1,6 +1,7 @@
 from datetime import date, datetime
+from decimal import Decimal
 
-from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer, String, Table, Text, Column
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer, Numeric, String, Table, Text, Column
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -44,6 +45,8 @@ class Book(Base):
     edicion: Mapped[str] = mapped_column(String(100), default="")
     idioma: Mapped[str] = mapped_column(String(80), default="Español")
     paginas: Mapped[int | None] = mapped_column(Integer)
+    numero_volumenes: Mapped[int | None] = mapped_column(Integer)
+    precio_unitario: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     procedencia: Mapped[str] = mapped_column(String(40), nullable=False)
     procedencia_detalle: Mapped[str] = mapped_column(String(240), default="")
     fecha_ingreso: Mapped[date] = mapped_column(Date, default=date.today, nullable=False)
@@ -106,6 +109,7 @@ class Library(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     nombre: Mapped[str] = mapped_column(String(180), unique=True, nullable=False)
     direccion: Mapped[str] = mapped_column(String(240), default="")
+    municipio: Mapped[str] = mapped_column(String(120), default="")
     encargado: Mapped[str] = mapped_column(String(160), default="")
     telefono: Mapped[str] = mapped_column(String(40), default="")
     email: Mapped[str] = mapped_column(String(160), default="")

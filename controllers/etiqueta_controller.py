@@ -20,5 +20,14 @@ class EtiquetaController:
     def exportar_envio(self, bulto: dict, libros: list[dict], destino: str) -> None:
         self.documentos.generar(bulto, libros, destino)
 
+    def exportar_control_envio(self, bulto: dict, libros: list[dict], destino: str) -> None:
+        self.documentos.generar_control_snbp(bulto, libros, destino)
+
+    def exportar_nota_entrega(self, bulto: dict, datos_receptor: dict, destino: str) -> None:
+        self.documentos.generar_nota_entrega(bulto, datos_receptor, destino)
+
+    def exportar_matriz_sucursales(self, ficha: dict, destino: str) -> None:
+        self.documentos.generar_matriz_sucursales(ficha, destino)
+
     def exportar_mini_ficha(self, bulto: dict, destino: str) -> None:
         self.mini_fichas.generar(bulto, destino)

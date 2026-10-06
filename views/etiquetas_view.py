@@ -10,7 +10,7 @@ class EtiquetasView(QWidget):
         self.ubicacion = ubicacion
         self.etiquetas = etiquetas
         layout = QVBoxLayout(self)
-        titulo = QLabel("Etiquetas de lomo y fichas catalográficas")
+        titulo = QLabel("Etiquetas y fichas catalográficas")
         titulo.setObjectName("pageTitle")
         layout.addWidget(titulo)
         self.tabla = QTableWidget(0, 5)
@@ -36,7 +36,7 @@ class EtiquetasView(QWidget):
         self.alto_etiqueta.setSuffix(" cm alto")
         cotas = QPushButton("Exportar cotas PDF")
         cotas.clicked.connect(self.exportar_cotas)
-        fichas = QPushButton("Exportar fichas PDF")
+        fichas = QPushButton("Exportar fichas catalográficas (4 por hoja carta)")
         fichas.clicked.connect(self.exportar_fichas)
         for boton in (recargar, cotas, fichas):
             acciones.addWidget(boton)
@@ -59,7 +59,9 @@ class EtiquetasView(QWidget):
         return [{
             "titulo": libro.titulo, "autor": libro.autor, "cota": libro.cota,
             "edicion": libro.edicion, "editorial": libro.editorial, "anio": libro.anio,
-            "paginas": libro.paginas, "isbn": libro.isbn, "numero_registro": libro.numero_registro,
+            "paginas": libro.paginas, "numero_volumenes": getattr(libro, "numero_volumenes", None),
+            "observaciones": libro.observaciones, "ciudad": getattr(libro, "ciudad", ""),
+            "isbn": libro.isbn, "numero_registro": libro.numero_registro,
         } for libro in libros]
 
     def exportar_cotas(self) -> None:
@@ -69,7 +71,10 @@ class EtiquetasView(QWidget):
         self._exportar("cotas.pdf", generador)
 
     def exportar_fichas(self) -> None:
-        self._exportar("fichas.pdf", self.etiquetas.exportar_fichas)
+        self._exportar(
+            "fichas_catalograficas.pdf",
+            self.etiquetas.exportar_fichas,
+        )
 
     def _exportar(self, nombre: str, generador) -> None:
         libros = self._seleccionados()

@@ -7,6 +7,8 @@ from sqlalchemy import MetaData
 
 
 class ExcelService:
+    SENSITIVE_USER_COLUMNS = {"password_hash", "salt"}
+
     def exportar(self, hojas: dict[str, list[dict]], destino: str | Path) -> Path:
         return self._escribir(hojas, destino)
 
@@ -17,7 +19,14 @@ class ExcelService:
         with engine.connect() as connection:
             for tabla in metadata.sorted_tables:
                 filas = [dict(fila._mapping) for fila in connection.execute(tabla.select())]
-                hojas[tabla.name] = {"columnas": [columna.name for columna in tabla.columns], "filas": filas}
+                columnas = [
+                    columna.name for columna in tabla.columns
+                    if not (tabla.name == "usuarios" and columna.name in self.SENSITIVE_USER_COLUMNS)
+                ]
+                hojas[tabla.name] = {
+                    "columnas": columnas,
+                    "filas": [{columna: fila[columna] for columna in columnas} for fila in filas],
+                }
         return self._escribir(hojas, destino, datos_crudos=True)
 
     def _escribir(self, hojas: dict[str, list[dict]], destino: str | Path, datos_crudos: bool = False) -> Path:
@@ -37,7 +46,16 @@ class ExcelService:
                     celda.font = Font(bold=True, color="FFFFFF")
                     celda.fill = PatternFill("solid", fgColor="1A1A1A")
                 for fila in filas:
-                    hoja.append([fila.get(columna, "") for columna in columnas])
+                    valores = [fila.get(columna, "") for columna in columnas]
+                    celdas = hoja.max_row + 1
+                    hoja.append([
+                        self._valor_seguro_excel(valor)
+                        if isinstance(valor, str) else valor
+                        for valor in valores
+                    ])
+                    for celda in hoja[celdas]:
+                        if isinstance(celda.value, str) and celda.value.startswith("'"):
+                            celda.data_type = "s"
                 hoja.freeze_panes = "A2"
                 hoja.auto_filter.ref = hoja.dimensions
                 for indice, columna in enumerate(hoja.columns, 1):
@@ -47,3 +65,9 @@ class ExcelService:
         ruta.parent.mkdir(parents=True, exist_ok=True)
         libro.save(ruta)
         return ruta
+
+    @staticmethod
+    def _valor_seguro_excel(valor: str) -> str:
+        if valor.lstrip(" \t\r\n").startswith(("=", "+", "-", "@")):
+            return f"'{valor}"
+        return valor

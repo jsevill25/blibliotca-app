@@ -27,6 +27,15 @@ class DatabaseManager:
 
     def initialize(self) -> None:
         Base.metadata.create_all(self.engine)
+        columnas_libros = {columna["name"] for columna in inspect(self.engine).get_columns("libros")}
+        columnas_bibliotecas = {columna["name"] for columna in inspect(self.engine).get_columns("bibliotecas")}
+        with self.engine.begin() as connection:
+            if "numero_volumenes" not in columnas_libros:
+                connection.execute(text("ALTER TABLE libros ADD COLUMN numero_volumenes INTEGER"))
+            if "precio_unitario" not in columnas_libros:
+                connection.execute(text("ALTER TABLE libros ADD COLUMN precio_unitario NUMERIC(12, 2)"))
+            if "municipio" not in columnas_bibliotecas:
+                connection.execute(text("ALTER TABLE bibliotecas ADD COLUMN municipio VARCHAR(120) NOT NULL DEFAULT ''"))
         columnas = {columna["name"] for columna in inspect(self.engine).get_columns("catalogacion")}
         if "codigo_clasificacion" not in columnas:
             with self.engine.begin() as connection:
