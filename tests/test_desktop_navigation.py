@@ -56,6 +56,7 @@ def test_application_entrypoint_only_starts_desktop_login_flow():
         for alias in node.names
     )
 
+    assert "PySide6.QtWidgets.QDialog" in imports
     assert "views.login_view.LoginView" in imports
     assert "views.main_window.MainWindow" in imports
     assert not any("web" in imported.lower() for imported in imports)

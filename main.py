@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import sys
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QDialog
 
 from config import APP_NAME
 from controllers.auth_controller import AuthController
