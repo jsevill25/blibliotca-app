@@ -7,7 +7,7 @@
 
 ## 1. Resumen del sistema
 
-Aplicación bibliotecaria local para registrar ingresos de libros, catalogarlos, administrar ubicaciones, distribuir materiales a sucursales, generar documentos y consultar reportes. La aplicación principal es de escritorio, construida con PySide6; también incluye una interfaz web de prueba servida por Python. La persistencia se realiza en SQLite mediante SQLAlchemy.
+Aplicación bibliotecaria local exclusivamente de escritorio para registrar ingresos de libros, catalogarlos, administrar ubicaciones, distribuir materiales a sucursales, generar documentos y consultar reportes. La interfaz usa PySide6 y la persistencia SQLite mediante SQLAlchemy. No se incluye servidor HTTP ni cliente web.
 
 El flujo de trabajo principal es:
 
@@ -23,7 +23,7 @@ flowchart LR
     E --> F
 ```
 
-La solución funciona localmente y no requiere un servicio de base de datos remoto. El modo web `--demo` utiliza una base temporal separada. Sin `--demo`, la vista web puede consultar la base configurada, pero las rutas mutadoras devuelven 403; la API permite el cambio obligatorio de clave y logout. La vista web usa HTTP sin TLS y no debe exponerse a redes compartidas.
+La solución funciona localmente y no requiere un servicio de base de datos remoto. `main.py` inicia directamente la autenticación de escritorio y después presenta los módulos permitidos para el rol activo. Las pruebas automatizadas operan con bases SQLite temporales; no cargan datos ficticios en la base de uso.
 
 ## 2. Alcance funcional
 
@@ -65,16 +65,14 @@ flowchart TB
     ORM --> SQLite[(biblioteca_central.db)]
     Controladores --> Servicios[services]
     Servicios --> Salidas[PDF / XLSX / respaldos]
-    Navegador --> Web[web_preview.py / HTTP local]
-    Web --> Controladores
 ```
 
-- `main.py` crea la aplicación Qt y solicita elegir interfaz de escritorio o web.
+- `main.py` crea la aplicación Qt y abre el flujo de autenticación de escritorio; no ofrece un selector web.
 - `views/main_window.py` crea la navegación y conecta vistas y controladores. Las páginas de Usuarios y Sucursales sólo se muestran a administradores.
+- `views/navigation.py` registra y selecciona widgets que pertenecen al `QStackedWidget`; las pruebas unitarias de navegación no necesitan cargar el runtime gráfico.
 - `database/db_manager.py` crea el motor SQLite, activa las claves foráneas por conexión, crea tablas e inicializa datos base. Su administrador de sesión confirma al salir sin error y revierte ante excepción.
 - `database/models.py` declara las entidades SQLAlchemy y las relaciones.
 - `services/` contiene creación de PDF, hojas Excel, mini-fichas y respaldo SQLite.
-- `web_preview.py` proporciona el servidor de demostración/consulta con `ThreadingHTTPServer`; el CLI usa loopback por defecto. Sin `--demo`, los endpoints de escritura se deniegan.
 - `views/main_view.py`, `models/libro_model.py` y partes de `controllers/libro_controller.py` contienen funcionalidad heredada Tkinter/SQLite. No son la ruta principal iniciada por `main.py`; deben tratarse como código legado y no como fuente de la operación actual.
 
 ## 4. Tecnologías y requisitos
@@ -104,13 +102,7 @@ python main.py
 
 En Windows se activa con `.venv\\Scripts\\activate`.
 
-### Vista web de demostración
-
-```bash
-python web_preview.py --demo --port 8766
-```
-
-Abrir `http://127.0.0.1:8766`. La base de demostración está en una ruta temporal diferente a la base de operación y sólo afecta esa base. Sin `--demo`, el servidor permite consultas autenticadas y rechaza escrituras con HTTP 403, excepto cambiar contraseña; logout también sigue disponible. No utilizarlo desde redes compartidas: el servidor de prueba no cifra el tráfico.
+La ejecución del comando abre directamente la ventana de inicio de sesión PySide6. Si se cancela el inicio, la conexión a SQLite se cierra sin abrir la ventana principal.
 
 ### Ubicación predeterminada
 
@@ -127,9 +119,9 @@ Abrir `http://127.0.0.1:8766`. La base de demostración está en una ruta tempor
 | Administrador | Operación general; administración de usuarios y sucursales. |
 | Bibliotecario | Recepción, catalogación, inventario, etiquetas, ubicación, distribución y reportes. |
 
-La administración de usuarios valida en `AuthController` que el solicitante exista, esté activo, tenga rol administrador y no tenga pendiente cambio obligatorio de clave. La administración de sucursales y usuarios también comprueba el rol en la API web. El acceso a las vistas de Usuarios y Sucursales se oculta para bibliotecarios.
+La administración de usuarios valida en `AuthController` que el solicitante exista, esté activo, tenga rol administrador y no tenga pendiente cambio obligatorio de clave. El acceso a las vistas de Usuarios y Sucursales se oculta para bibliotecarios y el controlador vuelve a comprobar el rol al ejecutar operaciones administrativas.
 
-**Control y reserva:** las operaciones API verifican nuevamente que el usuario siga activo y que haya completado el cambio obligatorio; una sesión ya emitida pierde acceso a las operaciones protegidas si se vuelve a marcar el cambio. El servidor web sigue siendo una vista de prueba, sin TLS ni vencimiento/rotación de sesiones.
+**Control y reserva:** el diálogo de acceso impide aceptar la sesión operativa hasta completar el cambio obligatorio de contraseña. `AuthController.acceso_operativo_permitido()` permite comprobar en la capa de lógica que la cuenta siga activa y no tenga un cambio pendiente. La interfaz completa no se pudo ejecutar visualmente en este entorno por falta de `libGL.so.1`.
 
 ## 7. Flujo y reglas de negocio
 
@@ -141,7 +133,7 @@ El usuario registra título y procedencia, además de los metadatos bibliográfi
 
 El flujo distingue catálogo Dewey o LC, código de clasificación, Cutter y cota completa. Se comprueba que el libro esté recibido, la clasificación sea admitida y la cota no esté vacía. Si ya existe la misma cota, se solicita confirmar cuando corresponde a un volumen compartido.
 
-La generación automática de cota, añadida al controlador central y conectada tanto a escritorio como a web, ofrece estos criterios:
+La generación automática de cota, conectada al flujo de escritorio, ofrece estos criterios:
 
 - Prefijo por orden: menos de 50 páginas (`Foll.`), dimensión mayor de 30 cm (`F`), Referencia (`R`), Infantil (`X`), Juvenil (`J`), Música escrita (`M`).
 - Biografía individual/colectiva (`B`/`B2`); ficción novelística, poesía, teatro o ensayo con variante venezolana; para otra no ficción valida Dewey y conserva hasta cinco decimales.
@@ -180,16 +172,14 @@ SQLite no cifra por sí mismo la base ni los respaldos. El sistema no incluye mi
 - PBKDF2-HMAC-SHA256 con 310.000 iteraciones y sal aleatoria por usuario (`database/seed_data.py`).
 - Comparación de hash con `hmac.compare_digest`.
 - Longitud mínima de contraseña nueva: diez caracteres.
-- Verificación de usuario activo antes de autenticar y al resolver sesiones web.
+- Verificación de usuario activo antes de autenticar.
 - Autorización administrativa centralizada para gestionar cuentas.
 - Restricciones SQLAlchemy/SQLite y claves foráneas activadas en conexiones.
 - Sesiones SQLAlchemy con commit y rollback ante excepciones.
-- La cookie de sesión web se establece `HttpOnly` y `SameSite=Strict`; agrega `Secure` con configuración de producción.
-- La interfaz web escapa texto al renderizar contenido textual en tablas y usa una base aislada para la demostración.
-- El cambio obligatorio de contraseña se vuelve a verificar en las rutas web protegidas; las escrituras sólo se permiten en la base de demostración.
+- La navegación de escritorio conserva referencias a las páginas `QScrollArea` añadidas al `QStackedWidget`; una prueba unitaria cubre la selección de página y el estado de botones.
 - `auditoria_log` registra inicios de sesión, cambios de clave, acciones administrativas, exportaciones y respaldos.
 
-Estos controles reducen riesgos, pero no sustituyen autorización de cada operación sensible, cifrado de datos, seguridad de red ni auditoría completa. El servidor web de prueba no implementa TLS ni expiración/renovación de sesión; `Secure` debe habilitarse detrás de HTTPS antes de cualquier uso en producción. Mantenerlo en loopback; ver A-04.
+Estos controles reducen riesgos, pero no sustituyen autorización de cada operación sensible, cifrado de datos ni auditoría completa. La base y los respaldos SQLite no están cifrados; ver hallazgos A-06 y A-07 en `INFORME_AUDITORIA_SISTEMA.md`.
 
 ## 10. Exportaciones y respaldos
 
@@ -204,7 +194,7 @@ Estos controles reducen riesgos, pero no sustituyen autorización de cada operac
 
 ## 11. Pruebas y estado de verificación
 
-Pruebas encontradas y recolectadas con pytest: **24 casos**.
+La última ejecución de `pytest -v` recolectó 24 pruebas y aprobó las 24, sin fallos.
 
 | Archivo | Cobertura principal |
 |---|---|
@@ -212,8 +202,9 @@ Pruebas encontradas y recolectadas con pytest: **24 casos**.
 | `tests/test_recepcion_mvc.py` | Recepción, validación, corrección y respaldo de la implementación MVC previa. |
 | `tests/test_services_and_branches.py` | PDF, Excel, backup/rotación y gestión de sucursales. |
 | `tests/test_system_workflow.py` | Flujo de recepción a distribución, movimientos, reportes y reglas de generación de cota. |
-| `tests/test_operational_readiness.py` | Catálogo sintético aislado, umbral de búsqueda, PDF paginado, restauración SQLite y API web con cambio inicial de clave/logout. |
-| `tests/test_international_audit.py` | Bloqueo por cambio de clave, exportación XLSX/PDF sin secretos y protegida contra fórmulas, claves foráneas, auditoría y validación del respaldo. |
+| `tests/test_operational_readiness.py` | Catálogo sintético aislado, umbral de búsqueda, PDF paginado y restauración SQLite. |
+| `tests/test_international_audit.py` | Bloqueo por cambio obligatorio de clave en el controlador, exportación XLSX/PDF sin secretos y protegida contra fórmulas, claves foráneas, auditoría y validación del respaldo. |
+| `tests/test_desktop_navigation.py` | Selección de páginas del stack y comprobación de que el entrypoint conserva únicamente el flujo de escritorio. |
 
 La suite ampliada se ejecuta con `pytest -v`; las pruebas usan rutas temporales y no modifican la base institucional. La prueba de restauración abre el respaldo en un archivo SQLite nuevo y vuelve a inicializarlo con SQLAlchemy. La prueba de catálogo mide una búsqueda contra 300 registros sintéticos con objetivo local menor a dos segundos y genera un PDF tabular con 300 filas; el tiempo es una referencia de este entorno, no una garantía para los equipos de destino. El respaldo valida automáticamente `PRAGMA integrity_check` antes de reportar éxito.
 
@@ -256,18 +247,16 @@ Para autorizar el uso en la Biblioteca Central se recomienda superar pruebas aut
 6. Procedimiento establecido para respaldo, recuperación, soporte y reporte de errores.
 7. Formatos y datos que aún no existen en el modelo aprobados por la institución.
 
-Este plan es una recomendación técnica, no una certificación ni garantía de cumplimiento normativo. Se recomienda iniciar con un piloto de datos controlados y un grupo pequeño de usuarios, mantener respaldada la base y acordar cómo volver al procedimiento anterior si surge un problema. Antes de operar con datos sensibles, atiende los riesgos residuales descritos en `INFORME_AUDITORIA_SISTEMA.md`, incluyendo credencial bootstrap conocida, web sin TLS/expiración de sesiones y controles institucionales de custodia.
+Este plan es una recomendación técnica, no una certificación ni garantía de cumplimiento normativo. Se recomienda iniciar con un piloto de datos controlados y un grupo pequeño de usuarios, mantener respaldada la base y acordar cómo volver al procedimiento anterior si surge un problema. Antes de operar con datos sensibles, atiende los riesgos residuales descritos en `INFORME_AUDITORIA_SISTEMA.md`, incluyendo credencial bootstrap conocida y controles institucionales de custodia.
 
 ## 13. Operación segura recomendada
 
 1. Instalar y ejecutar con una cuenta del sistema operativo dedicada, con acceso de escritura sólo a la carpeta de datos.
 2. Cambiar la contraseña inicial `admin123` antes de cargar datos reales y no difundirla fuera del procedimiento inicial.
-3. Mantener la vista web en `127.0.0.1`; no usar `--host 0.0.0.0` ni exponer el puerto en una red sin TLS, autenticación reforzada y control operativo.
-4. Configurar `BLIBLIOTECA_ENV=production` sólo tras colocar HTTPS delante del servidor para emitir cookie `Secure`; esta opción no proporciona TLS por sí misma.
-5. Restringir exportaciones y respaldos a personal autorizado; tratar XLSX y archivos `.db` como datos sensibles.
-6. Mantener copias adicionales cifradas y separadas del dispositivo de trabajo, con restauraciones de prueba documentadas.
-7. Probar una actualización sobre copia de base antes de aplicarla a producción.
-8. Revisar y validar manualmente cada cota generada, en particular Cutter y clasificación temática.
+3. Restringir exportaciones y respaldos a personal autorizado; tratar XLSX y archivos `.db` como datos sensibles.
+4. Mantener copias adicionales cifradas y separadas del dispositivo de trabajo, con restauraciones de prueba documentadas.
+5. Probar una actualización sobre copia de base antes de aplicarla a producción.
+6. Revisar y validar manualmente cada cota generada, en particular Cutter y clasificación temática.
 
 ## 14. Referencias internas
 

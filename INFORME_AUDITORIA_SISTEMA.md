@@ -3,23 +3,23 @@
 **Sistema evaluado:** Biblioteca Central Rómulo Gallegos  
 **Fecha de revisión:** 6 de octubre de 2026  
 **Tipo de trabajo:** revisión técnica de código fuente, arquitectura y pruebas disponibles  
-**Resultado global:** **A-01 a A-03 cuentan con controles implementados y probados; A-02 y A-09 tienen mitigaciones verificadas; A-07 está parcialmente mitigado. La puesta en marcha sigue condicionada a pruebas de despliegue y riesgos residuales.**
+**Resultado global:** **la aplicación y la auditoría se limitan al escritorio PySide6. A-01 a A-03 cuentan con controles implementados y probados; A-04 documenta y cierra la retirada de la vista web y el defecto de navegación reportado; A-07 está parcialmente mitigado. La puesta en marcha sigue condicionada a pruebas de despliegue y riesgos residuales.**
 **Base de revisión:** estado del workspace disponible durante esta revisión; no se asocia a un commit de liberación.
 
 ## 1. Resumen ejecutivo
 
 El sistema ofrece una base funcional para el flujo local de recepción, catalogación, ubicación y distribución. La arquitectura separa vistas, controladores, modelos y servicios; usa SQLAlchemy con claves foráneas SQLite habilitadas; las contraseñas se almacenan con PBKDF2-HMAC-SHA256, sal individual y comparación constante; y existen pruebas automatizadas para persistencia, flujos, documentos y respaldos.
 
-La revisión inicial encontró riesgos en confidencialidad, autorización y exportación XLSX. La implementación actual limita la exportación integral a administrador en vista y servicio, excluye hash/sal de Excel y PDF, neutraliza valores que podrían convertirse en fórmulas, impone el cambio de clave obligatorio en operaciones web y bloquea escrituras web fuera de modo demo. Se agregó `auditoria_log` para inicios de sesión, cambios de clave, acciones administrativas, exportaciones y respaldos. La suite automatizada actual incluye 24 pruebas aprobadas. La interfaz Qt no pudo verificarse dinámicamente en este entorno por falta de `libGL.so.1`.
+La revisión encontró riesgos en confidencialidad, autorización y exportación XLSX, y el usuario reportó que los botones del panel no abrían los módulos. La exportación integral está restringida a administradores; hash/sal se excluyen de Excel y PDF; se neutralizan valores que podrían convertirse en fórmulas; y `auditoria_log` registra inicios de sesión, cambios de clave, acciones administrativas, exportaciones y respaldos. Se retiraron el selector web, el servidor HTTP y sus recursos. También se corrigió la navegación para seleccionar páginas reales del `QStackedWidget`. La suite Qt no pudo abrirse visualmente en este entorno por falta de `libGL.so.1`; el reporte técnico detalla las verificaciones automatizadas y sus límites.
 
-**Dictamen:** los cambios y las pruebas locales no equivalen a certificación ni autorización de puesta en producción. No exponer la vista web de prueba a redes compartidas: no incorpora TLS ni expiración/rotación de sesión; `Secure` se habilita por configuración de producción y presupone HTTPS. Antes de operar con datos reales siguen siendo necesarios el piloto institucional, restauración en equipo limpio, revisión de permisos de archivos e impresión/aceptación del personal.
+**Dictamen:** los cambios y las pruebas locales no equivalen a certificación ni autorización de puesta en producción. La aplicación candidata ya no contiene una superficie web activa. Antes de operar con datos reales siguen siendo necesarios el piloto institucional, restauración en equipo limpio, revisión de permisos de archivos, apertura visual de Qt e impresión/aceptación del personal.
 
 ## 2. Alcance, método y limitaciones
 
 ### Alcance revisado
 
-- Punto de entrada e interfaz: `main.py`, `views/main_window.py`, `views/login_view.py`, `views/interface_choice_view.py`.
-- Autenticación y autorización: `controllers/auth_controller.py`, `database/seed_data.py`, `web_preview.py`.
+- Punto de entrada e interfaz: `main.py`, `views/main_window.py`, `views/login_view.py`, `views/navigation.py`.
+- Autenticación y autorización de escritorio: `controllers/auth_controller.py`, `database/seed_data.py`.
 - Persistencia: `database/db_manager.py` y `database/models.py`.
 - Reportes, exportaciones y respaldos: `views/reportes_view.py`, `services/excel_service.py`, `services/pdf_service.py`, `services/backup_service.py`.
 - Reglas de catalogación/cota: `controllers/catalogacion_controller.py` y su interfaz.
@@ -54,16 +54,16 @@ La severidad indicada es inherente al código observado; la probabilidad prácti
 
 **Riesgo residual:** la exportación administrativa todavía contiene datos operativos completos; se recomienda limitar el acceso al archivo y mantener un procedimiento de custodia. Si se distribuyeron XLSX integrales antes de la corrección, tratarlos como posible exposición de credenciales.
 
-### A-02. El cambio inicial obligatorio no está impuesto por la API
+### A-02. Cambio inicial obligatorio de contraseña
 
-**Severidad:** Alta en modo web; Moderada en escritorio  
-**Estado:** Remediado en rutas HTTP probadas; la credencial inicial estática aún requiere gestión de despliegue
+**Severidad:** Moderada
+**Estado:** El flujo de escritorio impone el cambio antes de aceptar la sesión; verificación visual Qt pendiente
 
-**Evidencia inicial:** el usuario `admin` se crea con `debe_cambiar_clave=True` y la documentación publica la clave inicial. La API web originalmente no imponía la marca.
+**Evidencia inicial:** el usuario `admin` se crea con `debe_cambiar_clave=True` y la documentación publica la credencial bootstrap.
 
-**Cambio y verificación:** `web_preview.py` permite que la sesión inicial consulte su estado y cambie su contraseña, pero bloquea con 403 las consultas y mutaciones protegidas mientras la marca está activa. Una prueba HTTP con servidor loopback y base temporal valida que la consulta y escritura se deniegan, que cambiar la clave habilita la API y que logout invalida el token.
+**Cambio y verificación:** `views/login_view.py` no acepta ni abre la ventana principal mientras la marca está activa; solicita y confirma la nueva clave, la cambia mediante `AuthController` y autentica de nuevo antes de continuar. Las pruebas de controlador verifican que las operaciones administrativas se rechazan mientras el cambio está pendiente y se habilitan después del cambio.
 
-**Riesgo residual:** el inicio de sesión crea una sesión restringida (no una sesión operativa) y la clave bootstrap sigue siendo fija/documentada. Antes del despliegue, debe establecerse una clave inicial única y cambiarla durante la instalación.
+**Riesgo residual:** la credencial bootstrap sigue siendo fija/documentada y la interacción de los diálogos no pudo probarse gráficamente en este contenedor. Establecer una clave inicial única y cambiarla durante la instalación.
 
 ### A-03. Inyección de fórmulas en exportaciones XLSX
 
@@ -76,31 +76,16 @@ La severidad indicada es inherente al código observado; la probabilidad prácti
 
 **Riesgo residual:** verificar archivos con los programas de hoja de cálculo adoptados por la institución y conservar los campos numéricos como datos numéricos.
 
-### A-04. Servidor web sin TLS ni atributos completos de sesión si se expone a red
+### A-04. Superficie web retirada y navegación de escritorio corregida
 
-**Severidad:** Moderada; Alta si se enlaza fuera de loopback  
-**Estado:** Mitigado parcialmente; exposición de red continúa abierta
+**Severidad:** Baja (mantenibilidad/operación)
+**Estado:** Cerrado en el código candidato; apertura visual Qt pendiente
 
-**Evidencia:** `web_preview.py` usa `ThreadingHTTPServer` y admite `--host`; el servidor no ofrece TLS ni expiración/rotación de sesiones. Las cookies usan `HttpOnly` y `SameSite=Strict`; `Secure` se agrega cuando `BLIBLIOTECA_ENV=production`, `APP_ENV=production` o `BLIBLIOTECA_COOKIE_SECURE=1`. La configuración recomendada sigue siendo loopback para esta vista de prueba.
+**Evidencia inicial:** el punto de entrada ofrecía un selector Desktop/Web aunque la operación solicitada se limita a escritorio. Además, el panel añadía `QScrollArea` al `QStackedWidget` pero registraba una vista interna distinta, por lo que los botones no podían activar la página esperada.
 
-**Impacto:** si se configura un host accesible desde la LAN, credenciales y cookies viajan sin cifrado de transporte; la sesión permanece en memoria hasta logout/proceso detenido y no tiene expiración propia. También aumenta la superficie de ataque de la API de pruebas.
+**Cambio y verificación:** `main.py` entra directamente al flujo de login; se eliminaron el selector, el servidor HTTP y los archivos `web/`. La navegación registra y selecciona el mismo widget de página añadido al stack. Pruebas unitarias verifican el widget seleccionado, el estado del botón y que el entrypoint no importe la implementación web ni el selector.
 
-**Recomendación:** mantener el modo web exclusivamente en loopback y etiquetarlo como vista local de prueba, o retirar ese modo de instalaciones productivas. Si se requiere acceso por red, ponerlo detrás de una arquitectura web soportada con TLS, expiración/rotación/revocación de sesión, controles anti-CSRF y límites de intentos. No exponer el servidor de desarrollo directamente.
-
-**Criterio de cierre:** comprobación de configuración que impide escucha no-loopback en modo local; o controles TLS y sesión verificados en una configuración aprobada para red.
-
-**Verificación añadida:** prueba unitaria comprueba atributos de cookie en desarrollo y configuración productiva. Esto no implementa TLS ni convierte el servidor de prueba en una aplicación apta para red.
-
-### A-09. La vista web anunciada como lectura puede modificar la base activa
-
-**Severidad:** Moderada  
-**Estado:** Remediado en rutas mutadoras cubiertas por integración HTTP
-
-**Evidencia inicial:** las rutas autenticadas POST para recepción, catalogación, distribución y ubicación ejecutaban controladores sin verificar `self.demo_mode`.
-
-**Cambio y verificación:** `web_preview.py` rechaza con 403 las rutas mutadoras (incluidas sucursales/usuarios) y PATCH cuando `demo_mode` es falso, manteniendo disponible el cambio de clave. La prueba HTTP intenta escritura fuera de modo demo y confirma rechazo y ausencia de persistencia en la base temporal.
-
-**Riesgo residual:** la cobertura automatizada comprueba el guard principal y las mutaciones críticas, pero no sustituye una revisión exhaustiva de rutas futuras; cada endpoint nuevo con efectos debe añadirse al control y a pruebas.
+**Riesgo residual:** no se pudo abrir la aplicación gráfica en este contenedor por falta de `libGL.so.1`; la aceptación visual debe realizarse en un equipo con runtime Qt/OpenGL instalado.
 
 ### A-05. Cutter automático no equivale a consulta Cutter-Sanborn ni garantiza norma BNV
 
@@ -158,22 +143,21 @@ La severidad indicada es inherente al código observado; la probabilidad prácti
 
 - Hash de clave PBKDF2-HMAC-SHA256 con 310.000 iteraciones y sal aleatoria por usuario; comparación con `hmac.compare_digest`.
 - Longitud mínima de diez caracteres para nuevas contraseñas.
-- Protección de operaciones de gestión de usuarios mediante rol administrador en el controlador y rutas web.
+- Protección de operaciones de gestión de usuarios mediante rol administrador en el controlador.
 - Claves foráneas activadas en SQLite y restricciones para roles, procedencias y estados.
 - Contexto de sesión SQLAlchemy con commit/rollback explícito.
 - Validaciones de estado para catalogación y distribución; verificación de libros catalogados antes del envío.
-- Cookie web `HttpOnly` y `SameSite=Strict`, con `Secure` condicional a producción; servidor documentado en loopback.
 - Copia SQLite mediante API de backup, verificación automática de `PRAGMA integrity_check` y rotación limitada; existe prueba de restauración en una DB temporal.
-- Suite automatizada de 24 pruebas: arquitectura (4), auditoría internacional (6), disponibilidad operativa (3), recepción MVC (5), servicios/sucursales (2) y flujo integral (4).
+- Suite automatizada con pruebas de arquitectura, auditoría, disponibilidad operativa, recepción MVC, servicios, flujo integral y navegación de escritorio; el número final se consigna en el reporte de esta revisión.
 
 Estos controles no compensan los hallazgos abiertos ni validan la configuración final de despliegue.
 
 ## 6. Plan de remediación priorizado
 
-### Prioridad inmediata (antes de datos reales o acceso remoto)
+### Prioridad inmediata (antes de datos reales)
 
 1. Rotar la credencial bootstrap conocida y establecer el proceso seguro de instalación.
-2. **A-04:** mantener web sólo en loopback hasta disponer de TLS y controles de sesión completos.
+2. Completar la apertura visual y aceptación de los módulos PySide6 en los equipos objetivo.
 3. Mantener las pruebas de exportación segura y verificar compatibilidad con las hojas de cálculo aprobadas.
 
 ### Prioridad de operación segura
@@ -191,7 +175,7 @@ Estos controles no compensan los hallazgos abiertos ni validan la configuración
 La recomendación de uso con datos reales podrá reconsiderarse cuando:
 
 - se rote la credencial bootstrap y se documente el proceso seguro de instalación;
-- se mantenga la prohibición de exponer la vista web sin TLS y gestión de sesión aprobadas;
+- se valide visualmente el flujo de escritorio y se confirme que todos los módulos accesibles por rol abren correctamente;
 - se valide la bitácora contra la política de retención y se amplíe a los cambios bibliotecarios que requiera la institución;
 - se realice una restauración documentada desde un respaldo separado;
 - la institución acepte el proceso de revisión de cotas y la fuente de Cutter.

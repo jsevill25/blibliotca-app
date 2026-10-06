@@ -1,107 +1,84 @@
-# Reporte técnico de auditoría y verificación
+# Reporte técnico de auditoría: versión de escritorio
 
 **Sistema:** Biblioteca Central Rómulo Gallegos  
-**Fecha:** 6 de octubre de 2026  
-**Alcance:** controles de autenticación, autorización, exportación, auditoría operativa y respaldos.  
-**Ejecución:** `pytest -v` — **24 aprobadas, 0 fallidas** (6,81 s).
+**Alcance:** aplicación de escritorio Python/PySide6, SQLite/SQLAlchemy, PDF y XLSX.
+**Ejecución automatizada:** `pytest -v` — **24 aprobadas, 0 fallidas** (5,93 s).
+**Dictamen:** mejoras verificadas a nivel de código y pruebas automatizadas; no es certificación ni aprobación institucional para producción.
 
-Este reporte acompaña la documentación actualizada de uso en `README.md` y `views/manual_view.py`, la descripción funcional `DESCRIPCION_PROYECTO.md`, y la documentación técnica y de hallazgos en `DOCUMENTACION_TECNICA_AUDITORIA.md` e `INFORME_AUDITORIA_SISTEMA.md`.
+## Resumen
 
-## Resumen ejecutivo
+Se retiró del producto la alternativa web y se corrigió el defecto de navegación que impedía seleccionar las páginas del panel: el `QStackedWidget` recibe y muestra ahora la misma página registrada en el mapa de navegación. `main.py` inicia directamente el flujo de acceso PySide6. Las pruebas específicas de navegación no necesitan iniciar Qt, lo cual permitió probar esta lógica en el contenedor.
 
-Se reforzó el control del cambio obligatorio de contraseña, se protegieron las rutas web y la exportación integral, se excluyeron credenciales de exportaciones Excel/PDF, se añadieron registros de auditoría y se incorporó verificación de integridad a los respaldos. Las nuevas pruebas usan SQLite temporal y datos de ensayo; no acceden ni escriben en la base institucional.
+Los datos sintéticos de la suite se crean en bases SQLite temporales. No se agregaron registros ficticios a la base activa de la biblioteca. La prueba funcional visual completa no pudo ejecutarse en este entorno porque falta la dependencia de sistema `libGL.so.1`; por tanto, los 24 tests verdes no prueban el renderizado real, los diálogos ni la impresión física.
 
-El resultado es una **mejora parcial y verificada por pruebas automatizadas**, no una certificación OWASP ni ISO/IEC 25010, ni una autorización automática para producción. Continúan pendientes el despliegue y aceptación en equipos reales, TLS para el modo web si se expone a una red, rotación del usuario inicial conocido, caducidad de sesiones y una política de protección/retención de la bitácora.
-
-## Cambios implementados
-
-### Autenticación, autorización y sesión web
-
-- `AuthController` registra inicios de sesión correctos/incorrectos y cambios de clave; ofrece una comprobación de autorización operativa que rechaza cuentas inactivas o con cambio de contraseña pendiente.
-- La gestión de cuentas exige una cuenta administradora activa que ya haya completado el cambio obligatorio.
-- La API verifica el estado operativo antes de servir rutas protegidas. Una sesión que se marque con cambio obligatorio pendiente vuelve a recibir 403 para consultas y escrituras; únicamente cambio de clave y logout permanecen disponibles.
-- Las mutaciones web se rechazan fuera del modo `--demo`. La prueba confirma 403 y ausencia de persistencia.
-- Las cookies usan `HttpOnly` y `SameSite=Strict`. `Secure` se agrega cuando `BLIBLIOTECA_ENV=production`, `APP_ENV=production` o `BLIBLIOTECA_COOKIE_SECURE=1`.
-- La exportación integral está restringida al administrador en la vista y en el servicio.
-
-### Exportaciones y datos sensibles
-
-- Excel descarta columnas `password_hash` y `salt` en todas las hojas, incluidas exportaciones genéricas e integrales.
-- La exportación integral exige autorización administrativa explícita.
-- Los valores de texto iniciados por `=`, `+`, `-` o `@`, incluso después de espacios, tabuladores o retornos, se escriben como texto neutralizado. Los valores numéricos legítimos siguen siendo numéricos.
-- Los generadores de tablas/reporte PDF eliminan las columnas sensibles antes de construir las tablas.
-
-### Bitácora y respaldos
-
-- Se añadió la tabla `auditoria_log`, creada automáticamente al inicializar una base existente.
-- Registra fecha/hora, actor opcional con clave foránea, acción, origen de escritorio/IP e información resumida de la operación.
-- Acciones cubiertas: `LOGIN_EXITOSO`, `LOGIN_FALLIDO`, `CAMBIO_CLAVE`, `EXPORTACION_DATOS`, `RESPALDO_DB` y `ACCION_ADMIN`.
-- No se guardan contraseñas, hashes, sales ni tokens en los detalles de auditoría.
-- `BackupService` ejecuta `PRAGMA integrity_check` en la copia recién creada y sólo reporta éxito si obtiene `ok`; el controlador registra el evento de respaldo.
-
-## Archivos modificados
+## Cambios de esta revisión
 
 | Archivo | Cambio |
 |---|---|
-| `controllers/auth_controller.py` | Registra login exitoso/fallido, cambio de clave y acciones de gestión de usuarios; añade comprobación de acceso operativo y bloquea administración para cuentas con cambio de clave pendiente. |
-| `controllers/backup_controller.py` | Registra cada respaldo exitoso con actor y origen. |
-| `controllers/biblioteca_controller.py` | Registra altas y desactivaciones de sucursales. |
-| `controllers/etiqueta_controller.py` | Registra exportaciones de fichas, etiquetas y documentos institucionales. |
-| `database/models.py` | Añade `AuditoriaLog`, su clave foránea, índices y restricción de tipos de acción. |
-| `services/audit_service.py` | Nuevo servicio común para validar y escribir eventos de auditoría. |
-| `services/backup_service.py` | Verifica automáticamente la integridad SQLite del archivo antes de declarar exitoso el respaldo. |
-| `services/excel_service.py` | Filtra campos secretos globalmente, protege celdas contra fórmulas y exige rol autorizado para exportación integral. |
-| `services/pdf_service.py` | Excluye columnas de hash/sal en tablas y reportes PDF. |
-| `web_preview.py` | Enforza cambio obligatorio por ruta, fija atributos de cookie y `Secure` según entorno, registra origen web y bloquea escrituras fuera del modo demo. |
-| `views/bibliotecas_view.py` | Pasa el usuario activo para auditar operaciones sobre sucursales. |
-| `views/distribucion_view.py` | Pasa base y actor al controlador de exportación para registrar los PDFs generados. |
-| `views/main_window.py` | Inyecta el actor/base en vistas de reportes, sucursales y exportación; identifica el usuario que dispara backups. |
-| `views/reportes_view.py` | Audita exportaciones PDF/Excel y backups; limita y vuelve a comprobar exportación integral. |
-| `README.md` | Documenta audit log, restricciones de escritura web y configuración de cookie segura. |
-| `DOCUMENTACION_TECNICA_AUDITORIA.md` | Actualiza cantidad y alcance de las pruebas automatizadas. |
-| `INFORME_AUDITORIA_SISTEMA.md` | Actualiza los estados de hallazgos mitigados y riesgos residuales. |
-| `REPORTE_TECNICO_AUDITORIA_OWASP_ISO.md` | Este informe detallado con inventario de cambios, resultados y evaluación parcial de alineación. |
-| `DESCRIPCION_PROYECTO.md` | Actualiza resumen, documentos institucionales, controles de seguridad y estado de pruebas del proyecto. |
-| `views/manual_view.py` | Actualiza las instrucciones integradas de primer acceso, modo web, matrices, fichas, exportaciones y respaldos. |
-| `TODO.md` | Registra los pendientes reales para instalación, seguridad, impresión, recuperación y aceptación del personal. |
-| `tests/test_database_architecture.py` | Comprueba que el esquema incluya `auditoria_log`. |
-| `tests/test_international_audit.py` | Nueva suite de seis pruebas de autorización, exportaciones, claves foráneas, auditoría, cookies y respaldos. |
-| `tests/test_operational_readiness.py` | Amplía la prueba HTTP para cookies y revocación operativa de sesiones, y comprueba bloqueo de escrituras fuera de modo demo. |
-| `tests/test_services_and_branches.py` | Verifica que el servicio requiera rol admin, no exponga hash/sal y neutralice entradas de fórmula. |
+| `main.py` | Elimina la elección entre escritorio y web; abre directamente el login de PySide6 y conserva el cierre de SQLite si el acceso se cancela. |
+| `views/main_window.py` | Registra la página scroll real del `QStackedWidget` y delega el registro/selección al helper testeable. |
+| `views/navigation.py` | Nuevo helper para añadir páginas y actualizar página activa/estado de botones. |
+| `views/interface_choice_view.py` | Eliminado el selector Escritorio/Web. |
+| `web_preview.py` | Eliminado el servidor HTTP y su API de demostración/consulta. |
+| `web/app.js`, `web/index.html`, `web/styles.css` | Eliminados los recursos del cliente web. |
+| `tests/test_desktop_navigation.py` | Añade pruebas de selección de página, estado de navegación y entrypoint exclusivamente de escritorio. |
+| `tests/test_operational_readiness.py` | Retira el test HTTP; conserva rendimiento sintético, generación PDF y restauración de backup aislada. |
+| `tests/test_international_audit.py` | Retira pruebas exclusivas de cookies web; mantiene autenticación del controlador, exportaciones, auditoría, FK e integridad de backup. |
+| `README.md` | Declara el alcance de escritorio y elimina instrucciones web obsoletas. |
+| `views/manual_view.py` | Retira la instrucción de uso de la vista web. |
+| `DOCUMENTACION_TECNICA_AUDITORIA.md` | Actualiza arquitectura, autorización, operación, suite y límites al alcance PySide6. |
+| `INFORME_AUDITORIA_SISTEMA.md` | Enfoca hallazgos en escritorio, registra el cierre de la superficie web y el defecto de navegación, y mantiene riesgos abiertos. |
+| `REPORTE_TECNICO_AUDITORIA_OWASP_ISO.md` | Sustituye el informe obsoleto sobre la API por este reporte de auditoría de escritorio. |
+| `DESCRIPCION_PROYECTO.md` | Aclara que la distribución actual es escritorio-only y actualiza las limitaciones de verificación. |
+| `TODO.md` | Registra el retiro de web y el resultado de pruebas actualizado. |
 
-## Resultado de pruebas
+## Pruebas y validaciones ejecutadas
 
-| Suite | Casos | Resultado |
-|---|---:|---|
-| `tests/test_database_architecture.py` | 4 | Aprobadas |
-| `tests/test_international_audit.py` | 6 | Aprobadas |
-| `tests/test_operational_readiness.py` | 3 | Aprobadas |
-| `tests/test_recepcion_mvc.py` | 5 | Aprobadas |
-| `tests/test_services_and_branches.py` | 2 | Aprobadas |
-| `tests/test_system_workflow.py` | 4 | Aprobadas |
-| **Total** | **24** | **24 aprobadas, 0 fallidas** |
+| Verificación | Resultado |
+|---|---|
+| `pytest -v` | 24 passed, 0 failed (5,93 s). |
+| `tests/test_desktop_navigation.py` | 2 passed; página activa y botón seleccionado correctos, entrypoint sin importaciones web. |
+| `tests/test_operational_readiness.py` | 2 passed; búsqueda sobre 300 libros sintéticos, matriz, PDF multipágina y restauración desde backup. |
+| `tests/test_international_audit.py` | 5 passed; cambio obligatorio de clave a nivel controlador, saneamiento XLSX, ausencia de secretos en exportaciones, FK y `PRAGMA integrity_check`. |
+| `python -m compileall -q main.py controllers database services views tests` | Correcto. |
+| Importación/ejecución visual de PySide6 | No verificable en este contenedor: falta `libGL.so.1`. |
+| Instalación en Windows/Linux objetivo, impresión física y aceptación bibliotecaria | Pendientes; requieren equipos, impresoras y personal institucionales. |
 
-La suite incluyó: contraseña obligatoria y sesión web previamente activa; bloqueo de escrituras fuera de demo; neutralización XLSX; exclusión de secretos en Excel/PDF; integridad de claves foráneas SQLite; bitácora para login, cambio de clave, acción administrativa y respaldo; atributos de cookie; y prueba de recuperación en una base temporal. También conserva la prueba con 300 registros sintéticos, búsqueda menor a dos segundos en este entorno y PDF de múltiples páginas. Este tiempo no es garantía de rendimiento en otros equipos.
+El resto de la suite conserva pruebas de esquema y migraciones existentes, recepción, servicios/sucursales y flujo integral. Las pruebas sintéticas no abren ni escriben en la base institucional.
 
-## Estado de alineación
+## Estado de controles abordados
 
-| Referencia | Estado observado | Límites |
+### OWASP (controles pertinentes)
+
+| Área | Estado de esta revisión | Evidencia y límite |
 |---|---|---|
-| **OWASP — control de acceso** | Mitigación verificada: clave pendiente bloquea rutas protegidas; exportación integral y administración restringidas; web de consulta no escribe fuera de demo. | La revisión cubre rutas conocidas; los endpoints nuevos deben seguir el mismo control. No se realizó prueba de penetración. |
-| **OWASP — inyección en exportaciones** | Mitigación implementada y probada para los prefijos de fórmula indicados; secretos filtrados en formatos tabulares. | Validar también con las aplicaciones de hoja de cálculo oficialmente usadas por la Biblioteca. |
-| **OWASP — autenticación/sesión** | Cambio obligatorio impuesto en API; cookies con `HttpOnly` y `SameSite=Strict`, y `Secure` activable por configuración. | Servidor de prueba sin TLS, sesiones sin expiración/rotación, y credencial inicial publicada que debe cambiarse antes de usar. `Secure` presupone que el tráfico llega mediante HTTPS. |
-| **OWASP — logging/monitoring** | Bitácora SQLAlchemy persistente para los seis grupos de acciones indicados, sin registrar secretos. | No es append-only ni a prueba de manipulación; faltan política de retención, acceso restringido, alertas y cobertura de todas las operaciones bibliotecarias. |
-| **ISO/IEC 25010 — seguridad** | Avances verificables en confidencialidad (filtrado), integridad (guardas/FK/backup) y responsabilidad (eventos auditados). | Evidencia parcial; no se evaluaron exhaustivamente confidencialidad operacional, autenticidad, trazabilidad ni resiliencia ante incidentes. |
-| **ISO/IEC 25010 — fiabilidad/mantenibilidad** | Pruebas automatizadas de regresión, integridad y restauración aislada; cambios en capas existentes. | No hubo validación de hardware/instalación productiva, prueba de carga formal, análisis de cobertura ni revisión de migraciones versionadas. |
+| Control de acceso | Parcialmente cubierto | Login de escritorio, cambio obligatorio de clave y autorización administrativa en controladores/servicios tienen pruebas de componentes. No se validó dinámicamente cada pantalla Qt por rol. |
+| Inyección en exportaciones | Mitigado y probado | XLSX neutraliza prefijos `=`, `+`, `-`, `@`, preservando los tipos numéricos. |
+| Exposición de datos sensibles | Mitigada y probada | `password_hash` y `salt` se omiten en Excel/PDF; exportación integral requiere autorización administrativa. |
+| Registro y monitoreo | Parcial | `auditoria_log` registra login, cambio de clave, acciones administrativas, exportaciones y backups; no es inmutable ni registra todos los cambios bibliográficos. |
+| Superficie de ataque web | Retirada del producto | Se eliminaron entrypoint, servidor, API y frontend web; pruebas verifican el entrypoint de escritorio. No implica que la aplicación de escritorio esté certificada. |
+| Credencial de instalación | Pendiente de operación | `admin123` es conocida y está documentada para bootstrap; debe cambiarse antes de cargar datos reales y se recomienda generar credenciales iniciales únicas por instalación. |
 
-Los resultados anteriores describen controles concretos; **no certifican cumplimiento** de OWASP, ISO/IEC 25010 ni de otra norma.
+### ISO/IEC 25010 (calidad del producto)
 
-## Pendientes antes de habilitar el sistema a usuarios
+| Característica | Evaluación limitada a evidencia disponible |
+|---|---|
+| Adecuación funcional | La suite cubre flujos bibliotecarios principales, documentos, exportaciones y respaldo con datos sintéticos. La aceptación del flujo real sigue pendiente. |
+| Fiabilidad | Se prueban claves foráneas, operaciones de flujo, integridad y restauración SQLite en temporales; no hay ensayo en el hardware de destino. |
+| Seguridad | Mejoras verificables en autorización de componentes, confidencialidad de exportaciones, neutralización XLSX y auditoría. Persisten riesgos de credencial bootstrap, cifrado de datos y cobertura de bitácora. |
+| Mantenibilidad | Separación MVC y helper de navegación testeable; aún faltan migraciones versionadas y más cobertura automatizada. |
+| Usabilidad/compatibilidad | No evaluables por completo aquí: no se pudo abrir la interfaz visual ni probar pantallas, escalado, impresoras, empaquetado o sistemas operativos finales. |
 
-1. Cambiar `admin123` durante la instalación y dejar de distribuir credenciales iniciales conocidas.
-2. No exponer `web_preview.py` fuera de loopback; si se necesita acceso por red, usar una arquitectura HTTPS soportada y añadir expiración/renovación/revocación de sesiones, protección CSRF y límites de intentos.
-3. Definir custodia, retención, permisos y respaldo de la bitácora; evaluar un destino de auditoría de sólo anexado.
-4. Realizar instalación y restauración en un equipo limpio, comprobar permisos/rutas de base de datos e impresión física de los formatos.
-5. Completar aceptación con bibliotecarios y aprobación institucional de formularios y documentos.
+Estas observaciones son una autoevaluación técnica acotada; **no declaran conformidad ni certificación** con OWASP, ISO/IEC 25010 u otra norma.
 
-La verificación de interfaz Qt e impresión física no se pudo ejecutar en este entorno. El resultado automatizado no sustituye esas pruebas ni la revisión institucional.
+## Riesgos y trabajo pendiente antes de uso institucional
+
+1. Cambiar la clave bootstrap conocida y definir un proceso seguro de alta inicial.
+2. Abrir la aplicación en un equipo con PySide6 y OpenGL instalados; comprobar login, cambio obligatorio de clave, navegación a cada módulo y acciones según rol.
+3. Hacer un piloto con bibliotecarios y datos de ensayo; cotejar los formularios y PDFs con los formatos institucionales aprobados.
+4. Probar el paquete de instalación en cada sistema objetivo y verificar rutas/permisos de SQLite y backups.
+5. Imprimir muestras reales: fichas 2×2, tablas horizontales, saltos, acentos, escala y márgenes.
+6. Ensayar recuperación en un equipo limpio, mantener una copia externa cifrada y definir responsables/retención.
+7. Considerar cifrado de base/respaldo, historial de cambios bibliográficos, migraciones versionadas y revisión profesional de Cutter.
+
+El resultado automatizado es un paso de verificación, no una certificación, una garantía de funcionamiento en equipos no probados ni una autorización para cargar datos institucionales.

@@ -79,7 +79,6 @@ class ManualView(QWidget):
             "2. Cambie la contraseña inicial conocida cuando el sistema lo solicite. Use una contraseña de al menos 10 caracteres y no comparta la clave inicial.",
             "3. La pestaña Manual de uso abre primero. Para volver en cualquier momento, selecciónela o use Ayuda > Abrir manual.",
             "4. El administrador ve además Usuarios y Sucursales. El bibliotecario trabaja con los módulos operativos.",
-            "5. La vista web es de prueba local. Use --demo para practicar con datos aislados; fuera de ese modo, las operaciones de escritura web se bloquean.",
         ])
         self._agregar_tema("Recepción", [
             "1. Abra Recepción y complete el título; es obligatorio. ISBN, autor, editorial, edición, año, páginas e idioma complementan el registro. Precio unitario (Bs.) y número de volúmenes son opcionales.",

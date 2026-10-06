@@ -1,23 +1,15 @@
-import json
 import re
 import sqlite3
-import threading
 import time
-from http.server import ThreadingHTTPServer
-from urllib.error import HTTPError
-from urllib.request import HTTPCookieProcessor, Request, build_opener
 
 from controllers.fichero_controller import FicheroController
 from controllers.recepcion_controller import RecepcionController
 from controllers.reportes_controller import ReportesController
 from database.db_manager import DatabaseManager
-from database.models import Book, Cataloging, Library, Location, User
+from database.models import Book, Cataloging, Library, Location
 from services.backup_service import BackupService
 from services.excel_service import ExcelService
 from services.pdf_service import PDFService
-from web_preview import PreviewHandler
-
-
 def test_isolated_synthetic_catalog_search_performance_and_report(tmp_path):
     database = DatabaseManager(tmp_path / "readiness-catalog.sqlite")
     database.initialize()
@@ -112,122 +104,3 @@ def test_backup_restore_round_trip_keeps_rows_and_relations(tmp_path):
     assert libro.recepcion is not None
     assert ReportesController(restaurada).resumen()["total"] == 1
     restaurada.close()
-
-
-def test_web_bootstrap_password_is_required_before_operational_api(tmp_path):
-    database = DatabaseManager(tmp_path / "web-isolated.sqlite")
-    database.initialize()
-    handler = type("TestPreviewHandler", (PreviewHandler,), {
-        "database": database,
-        "demo_mode": True,
-        "session_store": {},
-    })
-    servidor = ThreadingHTTPServer(("127.0.0.1", 0), handler)
-    worker = threading.Thread(target=servidor.serve_forever, daemon=True)
-    worker.start()
-    opener = build_opener(HTTPCookieProcessor())
-    base_url = f"http://127.0.0.1:{servidor.server_address[1]}"
-    try:
-        solicitud_login = Request(
-            f"{base_url}/api/login",
-            data=json.dumps({"username": "admin", "password": "admin123"}).encode(),
-            headers={"Content-Type": "application/json"},
-        )
-        with opener.open(solicitud_login) as respuesta:
-            sesion = json.load(respuesta)
-            cookie = respuesta.headers["Set-Cookie"]
-        assert sesion["debe_cambiar_clave"] is True
-        assert "HttpOnly" in cookie
-        assert "SameSite=Strict" in cookie
-
-        try:
-            opener.open(f"{base_url}/api/books")
-        except HTTPError as error:
-            assert error.code == 403
-        else:
-            raise AssertionError("La API no debe dar acceso operativo antes del cambio obligatorio de clave.")
-
-        solicitud_escritura = Request(
-            f"{base_url}/api/libraries",
-            data=json.dumps({
-                "nombre": "Sucursal que no debe crearse",
-                "direccion": "Dirección ficticia",
-            }).encode(),
-            headers={"Content-Type": "application/json"},
-        )
-        try:
-            opener.open(solicitud_escritura)
-        except HTTPError as error:
-            assert error.code == 403
-        else:
-            raise AssertionError("La API no debe permitir escrituras antes del cambio obligatorio de clave.")
-
-        solicitud_clave = Request(
-            f"{base_url}/api/password",
-            data=json.dumps({
-                "actual": "admin123",
-                "nueva": "ClavePruebaSegura2026",
-            }).encode(),
-            headers={"Content-Type": "application/json"},
-        )
-        with opener.open(solicitud_clave) as respuesta:
-            assert json.load(respuesta)["ok"] is True
-        with opener.open(f"{base_url}/api/books") as respuesta:
-            assert respuesta.status == 200
-            assert json.load(respuesta) == []
-
-        with database.session() as session:
-            usuario = session.query(User).filter_by(username="admin").one()
-            usuario.debe_cambiar_clave = True
-        try:
-            opener.open(f"{base_url}/api/books")
-        except HTTPError as error:
-            assert error.code == 403
-        else:
-            raise AssertionError("Una sesión web previamente autenticada debe bloquearse al marcar el cambio obligatorio.")
-
-        solicitud_clave_requerida = Request(
-            f"{base_url}/api/password",
-            data=json.dumps({
-                "actual": "ClavePruebaSegura2026",
-                "nueva": "ClavePruebaSegura2027",
-            }).encode(),
-            headers={"Content-Type": "application/json"},
-        )
-        with opener.open(solicitud_clave_requerida) as respuesta:
-            assert json.load(respuesta)["ok"] is True
-
-        handler.demo_mode = False
-        solicitud_no_demo = Request(
-            f"{base_url}/api/recepcion",
-            data=json.dumps({
-                "titulo": "No debe persistir fuera del modo demo",
-                "procedencia": "donacion",
-            }).encode(),
-            headers={"Content-Type": "application/json"},
-        )
-        try:
-            opener.open(solicitud_no_demo)
-        except HTTPError as error:
-            assert error.code == 403
-        else:
-            raise AssertionError("El modo de consulta no debe permitir escrituras.")
-        with database.session() as session:
-            assert session.query(Book).filter_by(
-                titulo="No debe persistir fuera del modo demo",
-            ).count() == 0
-
-        solicitud_logout = Request(f"{base_url}/api/logout", data=b"{}")
-        with opener.open(solicitud_logout) as respuesta:
-            assert json.load(respuesta)["ok"] is True
-        try:
-            opener.open(f"{base_url}/api/books")
-        except HTTPError as error:
-            assert error.code == 401
-        else:
-            raise AssertionError("El cierre de sesión debe invalidar el token de acceso.")
-    finally:
-        servidor.shutdown()
-        servidor.server_close()
-        worker.join(timeout=5)
-        database.close()

@@ -21,6 +21,7 @@ from views.distribucion_view import DistribucionView
 from views.etiquetas_view import EtiquetasView
 from views.fichero_view import FicheroView
 from views.manual_view import ManualView
+from views.navigation import add_navigation_page, show_navigation_page
 from views.recepcion_view import RecepcionView
 from views.reportes_view import ReportesView
 from views.theme import apply_theme
@@ -120,20 +121,15 @@ class MainWindow(QMainWindow):
         card_layout.setSizeConstraint(QVBoxLayout.SizeConstraint.SetMinimumSize)
         card_layout.addWidget(view)
         scroll.setWidget(card)
-        self.pages.addWidget(scroll)
-
         button = QPushButton(title)
         button.setObjectName("sidebarNav")
         button.setCheckable(True)
         button.clicked.connect(lambda _checked=False, page=title: self._show_page(page))
         sidebar_layout.addWidget(button)
-        self.navigation[title] = (button, card)
+        add_navigation_page(self.pages, self.navigation, title, button, scroll)
 
     def _show_page(self, title: str) -> None:
-        button, page = self.navigation[title]
-        self.pages.setCurrentWidget(page)
-        for nav_button, _page in self.navigation.values():
-            nav_button.setChecked(nav_button is button)
+        show_navigation_page(self.pages, self.navigation, title)
 
     def closeEvent(self, event) -> None:
         exito, resultado = self.backup.crear_backup(self.user.id, "escritorio")

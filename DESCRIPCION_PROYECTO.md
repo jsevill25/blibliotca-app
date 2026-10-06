@@ -18,7 +18,7 @@ La Biblioteca Central Rómulo Gallegos cumple funciones de recepción, catalogac
 
 La solución utiliza Python y PySide6 para la interfaz gráfica, SQLAlchemy como capa de persistencia sobre SQLite, ReportLab para documentos PDF y openpyxl para hojas de cálculo. Su arquitectura separa vistas, controladores, modelos persistentes y servicios auxiliares. El flujo principal registra los libros con un número de control, permite asignar clasificación y cota, genera etiquetas y fichas, y registra los envíos a sucursales junto con movimientos y ubicaciones. También incorpora autenticación por roles, auditoría operativa, reportes, exportaciones protegidas y respaldos locales.
 
-La aplicación está orientada a funcionar sin conexión a Internet y a mantener sus datos en una carpeta local portable. La suite automatizada documentada contiene 24 pruebas aprobadas en el entorno de desarrollo. La generación del paquete ejecutable, la instalación y la validación física de impresión deben comprobarse en equipos Windows y Linux de destino antes de una distribución institucional.
+La aplicación está orientada a funcionar sin conexión a Internet y a mantener sus datos en una carpeta local portable. La aplicación se distribuye como sistema de escritorio; esta versión no incluye un servidor ni una interfaz web. La suite automatizada se ejecuta con bases SQLite temporales y datos sintéticos. La generación del paquete ejecutable, la instalación y la validación física de impresión deben comprobarse en equipos Windows y Linux de destino antes de una distribución institucional.
 
 **Palabras clave:** biblioteca, inventario, catalogación, SQLite, aplicación portable, MVC, trazabilidad.
 
@@ -207,7 +207,7 @@ La evaluación con usuarios reales, los instrumentos de recolección de datos y 
 
 ## 11. Verificación y estado de la versión
 
-La suite automatizada cubre inicialización de base y claves foráneas, alta y corrección de recepción, catalogación, distribución, búsqueda e historial, reportes, generación PDF/XLSX, auditoría, controles de autorización y respaldos. En la última ejecución registrada, `pytest -v` aprobó 24 pruebas y no registró fallos.
+La suite automatizada cubre inicialización de base y claves foráneas, alta y corrección de recepción, catalogación, distribución, búsqueda e historial, reportes, generación PDF/XLSX, auditoría, controles de autorización, navegación de escritorio sin dependencias gráficas y respaldos. Registra su resultado actualizado en `REPORTE_TECNICO_AUDITORIA_OWASP_ISO.md`.
 
 La ejecución visual de Qt no pudo validarse en este entorno por ausencia de `libGL.so.1`. La instalación final en equipos institucionales y la impresión física tampoco se han certificado. Antes de una publicación deben probarse en los equipos de destino la interfaz Qt, diálogos, escritura desde USB, generación e impresión PDF y restauración desde un respaldo.
 
@@ -218,7 +218,7 @@ La ejecución visual de Qt no pudo validarse en este entorno por ausencia de `li
 - Calibrar etiquetas y verificar tamaño, orientación y escala de fichas Letter mediante impresión física en impresoras representativas.
 - Definir un procedimiento institucional de recuperación ante pérdida o daño de la memoria USB.
 - Rotar la contraseña inicial conocida y definir la custodia, retención y protección de bitácoras y respaldos.
-- Mantener el servidor web de prueba en loopback; un uso en red requiere TLS y controles completos de sesión.
+- La aplicación se limita a escritorio; cualquier interfaz web futura requiere una decisión de alcance, arquitectura y auditoría independiente.
 - Evaluar gestión de préstamos, sincronización centralizada o acceso multiusuario sólo si se amplía el alcance y se diseña una arquitectura apropiada.
 - Incorporar migraciones versionadas del esquema si la aplicación evoluciona con instalaciones que ya contengan datos.
 

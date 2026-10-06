@@ -1,6 +1,6 @@
 # Sistema Bibliotecario Rómulo Gallegos
 
-Aplicación de escritorio MVC para registrar, catalogar, ubicar y distribuir libros entre la Biblioteca Central y sus sucursales. La nueva interfaz usa PySide6, SQLAlchemy y SQLite; conserva los módulos anteriores en el repositorio, pero `main.py` inicia el sistema Qt.
+Aplicación **exclusivamente de escritorio** para registrar, catalogar, ubicar y distribuir libros entre la Biblioteca Central y sus sucursales. La interfaz usa PySide6, SQLAlchemy y SQLite. `main.py` abre directamente el inicio de sesión de escritorio; no se incluye un servidor ni un cliente web.
 
 La primera pestaña tras iniciar sesión es el manual gráfico de usuario; también está disponible desde el menú **Ayuda**. La descripción técnica y la base para la presentación académica del proyecto están en [DESCRIPCION_PROYECTO.md](DESCRIPCION_PROYECTO.md).
 
@@ -20,18 +20,6 @@ python main.py
 ```
 
 En Windows, activa el entorno con `.venv\Scripts\activate`.
-
-## Vista web de prueba
-
-Para recorrer en el navegador los módulos principales de la aplicación de escritorio con registros de muestra, ejecuta:
-
-```bash
-python web_preview.py --demo --port 8766
-```
-
-Abre `http://127.0.0.1:8766`. La vista incluye Manual, Recepción, Catalogación, Fichero e inventario, Distribución, Ubicación, Etiquetas, Reportes, Sucursales y Usuarios. Permite probar los flujos principales y generar documentos PDF/Excel; las operaciones que cambian datos SQLite sólo están habilitadas en modo `--demo`, que usa una base temporal separada y no modifica los datos de la aplicación. La interfaz web comparte la lógica y el tema negro/amarillo del escritorio, con composición adaptable al navegador; no es una captura píxel por píxel de Qt. Para consultar una base existente en modo lectura, inicia el servidor sin `--demo` o indica su ruta con `--database /ruta/a/biblioteca_central.db`.
-
-Las rutas de la API también rechazan cambios de datos fuera de `--demo`. El cambio obligatorio de contraseña se valida en el servidor en cada operación autenticada, no sólo en la interfaz. En producción configura `BLIBLIOTECA_ENV=production` (o `BLIBLIOTECA_COOKIE_SECURE=1`) para emitir cookies con `Secure`; el servidor de prueba usa HTTP, por lo que esa configuración sólo debe usarse detrás de HTTPS. No expongas directamente el servidor de prueba a redes compartidas.
 
 ## Primer acceso
 
@@ -64,7 +52,7 @@ Para ver el resultado detallado:
 pytest -v
 ```
 
-Las pruebas actuales usan SQLite temporal y datos sintéticos. La última ejecución documentada reunió 24 pruebas aprobadas; las pruebas de instalación en equipos destino, impresión física y aceptación del personal deben realizarse por separado. Consulta [DOCUMENTACION_TECNICA_AUDITORIA.md](DOCUMENTACION_TECNICA_AUDITORIA.md), [INFORME_AUDITORIA_SISTEMA.md](INFORME_AUDITORIA_SISTEMA.md) y [REPORTE_TECNICO_AUDITORIA_OWASP_ISO.md](REPORTE_TECNICO_AUDITORIA_OWASP_ISO.md).
+Las pruebas usan SQLite temporal y datos sintéticos. Consulta [DOCUMENTACION_TECNICA_AUDITORIA.md](DOCUMENTACION_TECNICA_AUDITORIA.md), [INFORME_AUDITORIA_SISTEMA.md](INFORME_AUDITORIA_SISTEMA.md) y [REPORTE_TECNICO_AUDITORIA_OWASP_ISO.md](REPORTE_TECNICO_AUDITORIA_OWASP_ISO.md) para el resultado actualizado y las pruebas de instalación, impresión y aceptación que aún deben realizarse por separado.
 
 ## Empaquetado
 

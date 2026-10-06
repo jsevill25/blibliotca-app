@@ -11,7 +11,6 @@ from database.db_manager import DatabaseManager
 from database.models import AuditoriaLog, User
 from services.excel_service import ExcelService
 from services.pdf_service import PDFService
-from web_preview import PreviewHandler
 
 
 def test_pending_password_blocks_operational_auth_controller_actions(tmp_path):
@@ -148,20 +147,3 @@ def test_backup_verifies_integrity_and_records_audit_event(tmp_path):
         assert evento.usuario_id == 1
         assert evento.origen == "pytest"
     database.close()
-
-
-def test_session_cookie_has_strict_attributes_and_secure_in_production(monkeypatch):
-    monkeypatch.delenv("BLIBLIOTECA_ENV", raising=False)
-    monkeypatch.delenv("APP_ENV", raising=False)
-    monkeypatch.delenv("BLIBLIOTECA_COOKIE_SECURE", raising=False)
-    cookie = PreviewHandler._session_cookie("token")
-    assert "HttpOnly" in cookie
-    assert "SameSite=Strict" in cookie
-    assert "Secure" not in cookie
-
-    monkeypatch.setenv("BLIBLIOTECA_ENV", "production")
-    cookie_production = PreviewHandler._session_cookie("", expired=True)
-    assert "HttpOnly" in cookie_production
-    assert "SameSite=Strict" in cookie_production
-    assert "Secure" in cookie_production
-    assert "Max-Age=0" in cookie_production
