@@ -14,7 +14,7 @@ class ManualView(QWidget):
         principal.addWidget(titulo)
         introduccion = QLabel(
             "Guía rápida para registrar, procesar y distribuir libros. "
-            "Esta pantalla se abre al iniciar sesión; también puede volver desde Ayuda o desde esta pestaña."
+            "El panel principal muestra existencias por biblioteca y registros recientes."
         )
         introduccion.setWordWrap(True)
         principal.addWidget(introduccion)
@@ -77,15 +77,16 @@ class ManualView(QWidget):
         self._agregar_tema("Primer acceso", [
             "1. Inicie sesión con la cuenta asignada. En la primera ejecución, la cuenta inicial es admin / admin123.",
             "2. Cambie la contraseña inicial conocida cuando el sistema lo solicite. Use una contraseña de al menos 10 caracteres y no comparta la clave inicial.",
-            "3. La pestaña Manual de uso abre primero. Para volver en cualquier momento, selecciónela o use Ayuda > Abrir manual.",
-            "4. El administrador ve además Usuarios y Sucursales. El bibliotecario trabaja con los módulos operativos.",
+            "3. El panel Inicio abre primero. Use Actualizar estadísticas después de registrar, catalogar o distribuir libros para consultar existencias por biblioteca y los registros recientes.",
+            "4. La pestaña Manual de uso contiene los pasos de cada módulo y está disponible desde la navegación principal.",
+            "5. El administrador ve además Usuarios y Sucursales. El bibliotecario trabaja con los módulos operativos.",
         ])
         self._agregar_tema("Recepción", [
-            "1. Abra Recepción y complete el título; es obligatorio. ISBN, autor, editorial, edición, año, páginas e idioma complementan el registro. Precio unitario (Bs.) y número de volúmenes son opcionales.",
+            "1. Abra Recepción y complete el título y la cantidad recibida; ambos son obligatorios. ISBN, autor, editorial, edición, año, páginas e idioma complementan el registro. Precio unitario (Bs.) y número de volúmenes son opcionales.",
             "2. Seleccione Donación, Compra o Biblioteca Nacional. Aparecerán los campos correspondientes al origen.",
-            "3. Pulse Registrar / guardar cambios. Se asigna un número REG-AAAA-NNNNN y el libro queda en estado recibido.",
-            "4. Busque por título, autor o ISBN; use los filtros de procedencia y fechas para acotar la lista.",
-            "5. Seleccione un libro recibido para corregirlo y guarde los cambios. La corrección queda asociada al usuario y fecha.",
+            "3. Pulse Registrar / guardar cambios. Se asigna un número REG-AAAA-NNNNN, se conserva la cantidad ingresada en el registro y se crea la existencia inicial en la Biblioteca Central.",
+            "4. Busque por título, autor o ISBN; use los filtros de procedencia y fechas para acotar la lista. La tabla muestra la cantidad recibida.",
+            "5. Seleccione un libro recibido para corregirlo y guarde los cambios. La corrección queda asociada al usuario y fecha; los registros ya catalogados no se alteran desde Recepción.",
         ])
         self._agregar_tema("Catalogación", [
             "1. Busque y seleccione un libro recibido en la lista de pendientes.",
@@ -101,8 +102,8 @@ class ManualView(QWidget):
         ])
         self._agregar_tema("Distribución", [
             "1. Elija una sucursal activa y, si corresponde, indique género/tipo y observaciones.",
-            "2. Busque y seleccione uno o más libros catalogados. Los libros recibidos no se pueden enviar sin catalogar.",
-            "3. Pulse Crear envío. Se genera un código ENV-AAAAMMDD-NNN y se registra la ubicación/movimiento.",
+            "2. Busque y seleccione uno o más libros catalogados que tengan ejemplares en la Biblioteca Central. Se transfiere un ejemplar por cada título seleccionado.",
+            "3. Pulse Crear envío. Se genera un código ENV-AAAAMMDD-NNN, se descuenta una unidad del stock central y se suma a la sucursal; la cantidad originalmente recibida se conserva.",
             "4. Confirme para generar el Control de Envío al Sistema Nacional de Bibliotecas Públicas, con totales cuando precio y volúmenes estén registrados; también puede guardar la mini-ficha de caja.",
             "5. Seleccione un envío de la lista y pulse Nota de entrega. Verifique los datos de sucursal y complete el nombre y la cédula exacta de quien recibe antes de guardar el PDF.",
             "6. Registre el municipio de la sucursal en Bibliotecas para que aparezca automáticamente en la Nota de Entrega.",
@@ -129,6 +130,12 @@ class ManualView(QWidget):
             "4. Crear backup ahora copia la base SQLite y comprueba su integridad. Al cerrar la aplicación también se intenta crear un respaldo; se conservan los siete más recientes.",
             "5. Los eventos de acceso, cambios de contraseña, administración, exportaciones y respaldos quedan registrados en la bitácora. No contiene contraseñas ni tokens y no reemplaza un procedimiento institucional de auditoría.",
             "6. Los respaldos no están cifrados ni sustituyen copias externas. Verifique la copia y coordine su custodia antes de usar datos reales.",
+        ])
+        self._agregar_tema("Panel Inicio", [
+            "1. El panel muestra las bibliotecas activas, la cantidad de registros con stock y el total de ejemplares disponibles en cada sede.",
+            "2. La tabla por biblioteca separa recibidos, catalogados y distribuidos; la tabla inferior muestra los doce registros de libros más recientes y el stock combinado por sucursal.",
+            "3. Pulse Actualizar estadísticas al volver al panel para ver las operaciones que acaba de realizar.",
+            "4. Los registros de prueba se cargan de manera idempotente en la base de datos predeterminada. La inicialización conserva los datos existentes y completa el stock faltante de libros antiguos sin duplicar sus registros.",
         ])
         self._agregar_tema("Usuarios y sucursales (admin)", [
             "1. En Usuarios, cree cuentas con rol bibliotecario o admin. Para editar, seleccione una fila, corrija los datos y pulse Guardar cambios.",

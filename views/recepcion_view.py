@@ -74,8 +74,8 @@ class RecepcionView(QWidget):
         filtros.addWidget(self.filtro_desde)
         filtros.addWidget(self.filtro_hasta)
         layout.addLayout(filtros)
-        self.tabla = QTableWidget(0, 6)
-        self.tabla.setHorizontalHeaderLabels(["ID", "Título", "Autor", "Registro", "Estado", "Procedencia"])
+        self.tabla = QTableWidget(0, 7)
+        self.tabla.setHorizontalHeaderLabels(["ID", "Título", "Autor", "Registro", "Estado", "Cantidad recibida", "Procedencia"])
         self.tabla.setColumnHidden(0, True)
         self.tabla.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.tabla.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -94,7 +94,10 @@ class RecepcionView(QWidget):
         )
         self.tabla.setRowCount(len(libros))
         for row, libro in enumerate(libros):
-            valores = (str(libro.id), libro.titulo, libro.autor, libro.numero_registro, libro.estado, libro.procedencia)
+            valores = (
+                str(libro.id), libro.titulo, libro.autor, libro.numero_registro,
+                libro.estado, str(libro.cantidad), libro.procedencia,
+            )
             for column, value in enumerate(valores):
                 item = QTableWidgetItem(value)
                 if column == 0:

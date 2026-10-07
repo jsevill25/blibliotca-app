@@ -2,12 +2,12 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-from sqlalchemy import create_engine, event, inspect, text
+from sqlalchemy import create_engine, event, exists, inspect, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from config import DATABASE_PATH
-from database.models import Base
+from database.models import Base, Book, BookStock, Library, Location
 from database.seed_data import seed_initial_data
 
 
@@ -44,6 +44,40 @@ class DatabaseManager:
                 connection.execute(text("ALTER TABLE catalogacion ADD COLUMN codigo_clasificacion VARCHAR(40) NOT NULL DEFAULT ''"))
         with self.session() as session:
             seed_initial_data(session, self.database_path)
+            columnas_libros = {columna["name"] for columna in inspect(self.engine).get_columns("libros")}
+            tablas = set(inspect(self.engine).get_table_names())
+            if {"id", "cantidad", "activo"} <= columnas_libros and {"ubicaciones", "stock_libros"} <= tablas:
+                self._migrar_existencias_legacy(session)
+
+    @staticmethod
+    def _migrar_existencias_legacy(session: Session) -> None:
+        central_id = session.scalar(
+            select(Library.id).where(Library.nombre == "Biblioteca Central Rómulo Gallegos")
+        )
+        ultima_ubicacion_id = (
+            select(Location.id)
+            .where(Location.libro_id == Book.id)
+            .order_by(Location.fecha_ubicacion.desc(), Location.id.desc())
+            .limit(1)
+            .correlate(Book)
+            .scalar_subquery()
+        )
+        faltantes = session.execute(
+            select(Book.id, Book.cantidad, ultima_ubicacion_id)
+            .where(
+                Book.activo.is_(True),
+                ~exists(select(BookStock.id).where(BookStock.libro_id == Book.id)),
+            )
+        ).all()
+        for libro_id, cantidad, ubicacion_id in faltantes:
+            ubicacion = session.get(Location, ubicacion_id) if ubicacion_id else None
+            biblioteca_id = ubicacion.biblioteca_id if ubicacion and ubicacion.biblioteca_id else central_id
+            if biblioteca_id is not None:
+                session.add(BookStock(
+                    libro_id=libro_id,
+                    biblioteca_id=biblioteca_id,
+                    cantidad=max(0, cantidad or 0),
+                ))
 
     @contextmanager
     def session(self) -> Iterator[Session]:

@@ -2,11 +2,11 @@ from datetime import date, datetime, time, timedelta
 import re
 import unicodedata
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import and_, case, desc, func, select
 from sqlalchemy.orm import aliased
 
 from database.db_manager import DatabaseManager
-from database.models import Book, Cataloging, Library, Location, Package, package_books
+from database.models import Book, BookStock, Cataloging, Library, Location, Package, package_books
 
 
 class ReportesController:
@@ -197,6 +197,74 @@ class ReportesController:
                 "catalogacion": {"catalogados": catalogados, "pendientes": pendientes},
                 "distribucion": distribucion, "ubicaciones": ubicaciones,
             }
+
+    def estadisticas_panel(self) -> dict:
+        with self.database.session() as session:
+            bibliotecas = session.execute(
+                select(
+                    Library.id,
+                    Library.nombre,
+                    Library.municipio,
+                    func.count(func.distinct(case((BookStock.cantidad > 0, Book.id)))),
+                    func.coalesce(
+                        func.sum(case((and_(Book.id.is_not(None), BookStock.cantidad > 0), BookStock.cantidad), else_=0)),
+                        0,
+                    ),
+                    func.count(func.distinct(case((and_(BookStock.cantidad > 0, Book.estado == "recibido"), Book.id)))),
+                    func.count(func.distinct(case((and_(BookStock.cantidad > 0, Book.estado == "catalogado"), Book.id)))),
+                    func.count(func.distinct(case((and_(BookStock.cantidad > 0, Book.estado == "distribuido"), Book.id)))),
+                )
+                .select_from(Library)
+                .outerjoin(BookStock, BookStock.biblioteca_id == Library.id)
+                .outerjoin(Book, (Book.id == BookStock.libro_id) & Book.activo.is_(True))
+                .where(Library.activa.is_(True))
+                .group_by(Library.id, Library.nombre, Library.municipio)
+                .order_by(Library.nombre)
+            ).all()
+            libros = session.execute(
+                select(
+                    Book.numero_registro,
+                    Book.titulo,
+                    Book.autor,
+                    Book.estado,
+                    Book.fecha_ingreso,
+                    Book.cantidad,
+                    func.coalesce(func.sum(BookStock.cantidad), 0),
+                )
+                .outerjoin(BookStock, BookStock.libro_id == Book.id)
+                .where(Book.activo.is_(True))
+                .group_by(Book.id)
+                .order_by(Book.fecha_ingreso.desc(), Book.id.desc())
+                .limit(12)
+            ).all()
+
+        return {
+            "bibliotecas": [
+                {
+                    "id": fila[0],
+                    "nombre": fila[1],
+                    "municipio": fila[2],
+                    "registros": fila[3],
+                    "ejemplares": fila[4],
+                    "recibidos": fila[5],
+                    "catalogados": fila[6],
+                    "distribuidos": fila[7],
+                }
+                for fila in bibliotecas
+            ],
+            "libros": [
+                {
+                    "registro": fila[0],
+                    "titulo": fila[1],
+                    "autor": fila[2],
+                    "estado": fila[3],
+                    "fecha": fila[4].strftime("%d/%m/%Y"),
+                    "cantidad_registrada": fila[5],
+                    "ejemplares_en_bibliotecas": fila[6],
+                }
+                for fila in libros
+            ],
+        }
 
     def inventario(self, inicio: date | None = None, fin: date | None = None) -> list[dict]:
         with self.database.session() as session:

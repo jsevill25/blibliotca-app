@@ -50,6 +50,7 @@ def test_flujo_recepcion_catalogacion_distribucion_y_historial(tmp_path):
     libro = recepcion.listar(texto="978-0000000001")[0]
     assert libro.numero_registro == numero
     assert libro.estado == "recibido"
+    assert libro.cantidad == 1
     assert libro.numero_volumenes == 2
     assert str(libro.precio_unitario) == "125.50"
     editado, mensaje = recepcion.editar(libro.id, {
@@ -127,6 +128,7 @@ def test_flujo_recepcion_catalogacion_distribucion_y_historial(tmp_path):
     assert bulto["municipio"] == "Angostura del Orinoco"
     assert bulto["encargada"] == "Encargada Norte"
     assert bulto["cantidad_volumenes"] == 3
+    assert libro.cantidad == 1
     assert distribucion.listar_envios()[0]["codigo_envio"] == codigo
     matriz_areas = ReportesController(database).resumen_distribucion_areas()
     sucursal_areas = next(

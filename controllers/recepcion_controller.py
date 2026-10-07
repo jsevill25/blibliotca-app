@@ -2,6 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import joinedload
 
 from database.db_manager import DatabaseManager
@@ -69,36 +70,52 @@ class RecepcionController:
         if precio_unitario is not None and (not precio_unitario.is_finite() or precio_unitario < 0):
             return False, "El precio unitario debe ser un monto válido mayor o igual a cero."
 
-        with self.database.session() as session:
-            central = session.scalar(select(Library).where(Library.nombre == "Biblioteca Central Rómulo Gallegos"))
-            if central is None:
-                return False, "No está registrada la biblioteca central."
-            prefijo = f"REG-{date.today().year}-"
-            ultimo = session.scalar(select(Book.numero_registro).where(Book.numero_registro.like(f"{prefijo}%")).order_by(Book.numero_registro.desc()).limit(1))
-            secuencia = int(ultimo.rsplit("-", 1)[1]) + 1 if ultimo else 1
-            libro = Book(
-                titulo=titulo, autor=str(datos.get("autor", "")).strip(),
-                editorial=str(datos.get("editorial", "")).strip(), anio=anio,
-                isbn=str(datos.get("isbn", "")).strip(), edicion=str(datos.get("edicion", "")).strip(),
-                idioma=str(datos.get("idioma", "Español")).strip() or "Español", paginas=paginas,
-                numero_volumenes=numero_volumenes, cantidad=cantidad, precio_unitario=precio_unitario,
-                procedencia=procedencia, procedencia_detalle=str(datos.get("procedencia_detalle", "")).strip(),
-                fecha_ingreso=date.today(), numero_registro=f"{prefijo}{secuencia:05d}",
-                observaciones=str(datos.get("observaciones", "")).strip(), estado="recibido",
-            )
-            session.add(libro)
-            session.flush()
-            session.add(Reception(
-                libro_id=libro.id, tipo_ingreso=procedencia,
-                donante_nombre=str(datos.get("donante_nombre", "")).strip(),
-                proveedor_nombre=str(datos.get("proveedor_nombre", "")).strip(),
-                institucion_origen=str(datos.get("institucion_origen", "")).strip(),
-                observaciones=libro.observaciones, registrado_por=usuario_id,
-            ))
-            session.add(Location(libro_id=libro.id, biblioteca_id=central.id, tipo_ubicacion="deposito", sala="Recepción"))
-            session.add(BookStock(libro_id=libro.id, biblioteca_id=central.id, cantidad=cantidad, actualizado_en=datetime.now()))
-            session.add(Movement(libro_id=libro.id, tipo_movimiento="recepcion", destino=central.nombre, usuario_id=usuario_id, detalle=f"Ingreso {libro.numero_registro}: cantidad {cantidad}"))
-            numero_registro = libro.numero_registro
+        try:
+            with self.database.session() as session:
+                central = session.scalar(select(Library).where(Library.nombre == "Biblioteca Central Rómulo Gallegos"))
+                if central is None:
+                    return False, "No está registrada la biblioteca central."
+                prefijo = f"REG-{date.today().year}-"
+                registros = session.scalars(
+                    select(Book.numero_registro).where(Book.numero_registro.like(f"{prefijo}%"))
+                )
+                secuencias = []
+                for registro in registros:
+                    try:
+                        secuencias.append(int(registro.rsplit("-", 1)[1]))
+                    except (IndexError, ValueError):
+                        continue
+                secuencia = max(secuencias, default=0) + 1
+                numero_registro = f"{prefijo}{secuencia:05d}"
+                while session.scalar(select(Book.id).where(Book.numero_registro == numero_registro)) is not None:
+                    secuencia += 1
+                    numero_registro = f"{prefijo}{secuencia:05d}"
+                libro = Book(
+                    titulo=titulo, autor=str(datos.get("autor", "")).strip(),
+                    editorial=str(datos.get("editorial", "")).strip(), anio=anio,
+                    isbn=str(datos.get("isbn", "")).strip(), edicion=str(datos.get("edicion", "")).strip(),
+                    idioma=str(datos.get("idioma", "Español")).strip() or "Español", paginas=paginas,
+                    numero_volumenes=numero_volumenes, cantidad=cantidad, precio_unitario=precio_unitario,
+                    procedencia=procedencia, procedencia_detalle=str(datos.get("procedencia_detalle", "")).strip(),
+                    fecha_ingreso=date.today(), numero_registro=numero_registro,
+                    observaciones=str(datos.get("observaciones", "")).strip(), estado="recibido",
+                )
+                session.add(libro)
+                session.flush()
+                session.add(Reception(
+                    libro_id=libro.id, tipo_ingreso=procedencia,
+                    donante_nombre=str(datos.get("donante_nombre", "")).strip(),
+                    proveedor_nombre=str(datos.get("proveedor_nombre", "")).strip(),
+                    institucion_origen=str(datos.get("institucion_origen", "")).strip(),
+                    observaciones=libro.observaciones, registrado_por=usuario_id,
+                ))
+                session.add(Location(libro_id=libro.id, biblioteca_id=central.id, tipo_ubicacion="deposito", sala="Recepción"))
+                session.add(BookStock(libro_id=libro.id, biblioteca_id=central.id, cantidad=cantidad, actualizado_en=datetime.now()))
+                session.add(Movement(libro_id=libro.id, tipo_movimiento="recepcion", destino=central.nombre, usuario_id=usuario_id, detalle=f"Ingreso {numero_registro}: cantidad {cantidad}"))
+        except IntegrityError:
+            return False, "No se pudo guardar el registro por un conflicto de datos. Verifique el número de registro e inténtelo de nuevo."
+        except SQLAlchemyError as error:
+            return False, f"No se pudo guardar el registro en la base de datos: {error}"
         return True, numero_registro
 
     def listar(self, texto: str = "", procedencia: str = "", inicio: date | None = None, fin: date | None = None) -> list[Book]:

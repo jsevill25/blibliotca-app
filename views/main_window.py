@@ -17,6 +17,7 @@ from database.db_manager import DatabaseManager
 from database.models import User
 from views.catalogacion_view import CatalogacionView
 from views.bibliotecas_view import BibliotecasView
+from views.dashboard_view import DashboardView
 from views.distribucion_view import DistribucionView
 from views.etiquetas_view import EtiquetasView
 from views.fichero_view import FicheroView
@@ -72,6 +73,8 @@ class MainWindow(QMainWindow):
         self.navigation = {}
         root_layout.addWidget(self.pages, 1)
 
+        self.dashboard_view = DashboardView(ReportesController(database))
+        self._add_page("Inicio", self.dashboard_view, sidebar_layout)
         self.manual_view = ManualView()
         self._add_page("Manual de uso", self.manual_view, sidebar_layout)
         recepcion = RecepcionController(database)
@@ -105,7 +108,7 @@ class MainWindow(QMainWindow):
         logout.setObjectName("sidebarNav")
         logout.clicked.connect(self.close)
         sidebar_layout.addWidget(logout)
-        self._show_page("Manual de uso")
+        self._show_page("Inicio")
 
     def _add_page(self, title: str, view: QWidget, sidebar_layout: QVBoxLayout) -> None:
         view.setObjectName("moduleView")
@@ -130,6 +133,8 @@ class MainWindow(QMainWindow):
 
     def _show_page(self, title: str) -> None:
         show_navigation_page(self.pages, self.navigation, title)
+        if title == "Inicio":
+            self.dashboard_view.actualizar()
 
     def closeEvent(self, event) -> None:
         exito, resultado = self.backup.crear_backup(self.user.id, "escritorio")

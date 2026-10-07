@@ -13,7 +13,20 @@ class DistribucionController:
 
     def libros_disponibles(self, texto: str = "") -> list[Book]:
         with self.database.session() as session:
-            query = select(Book).where(Book.estado == "catalogado", Book.activo.is_(True)).order_by(Book.titulo)
+            central_id = session.scalar(select(Library.id).where(Library.nombre == "Biblioteca Central Rómulo Gallegos"))
+            if central_id is None:
+                return []
+            query = (
+                select(Book)
+                .join(BookStock, BookStock.libro_id == Book.id)
+                .where(
+                    Book.estado.in_({"catalogado", "distribuido"}),
+                    Book.activo.is_(True),
+                    BookStock.biblioteca_id == central_id,
+                    BookStock.cantidad > 0,
+                )
+                .order_by(Book.titulo)
+            )
             if texto.strip():
                 patron = f"%{texto.strip()}%"
                 query = query.where((Book.titulo.ilike(patron)) | (Book.autor.ilike(patron)) | (Book.cota.ilike(patron)))
@@ -28,9 +41,25 @@ class DistribucionController:
             if destino is None or not destino.activa:
                 return False, "La biblioteca destino no existe o está inactiva."
             central = session.scalar(select(Library).where(Library.nombre == "Biblioteca Central Rómulo Gallegos"))
+            if central is None:
+                return False, "No está registrada la biblioteca central."
+            if destino.id == central.id:
+                return False, "Seleccione una sucursal distinta de la biblioteca central."
             libros = list(session.scalars(select(Book).where(Book.id.in_(ids))))
-            if len(libros) != len(ids) or any(libro.estado != "catalogado" for libro in libros):
-                return False, "Todos los libros deben existir y estar catalogados."
+            if len(libros) != len(ids) or any(libro.estado not in {"catalogado", "distribuido"} for libro in libros):
+                return False, "Todos los libros deben existir y estar catalogados o distribuidos."
+            existencias_centrales = {
+                stock.libro_id: stock
+                for stock in session.scalars(
+                    select(BookStock).where(
+                        BookStock.libro_id.in_(ids),
+                        BookStock.biblioteca_id == central.id,
+                        BookStock.cantidad > 0,
+                    )
+                )
+            }
+            if len(existencias_centrales) != len(ids):
+                return False, "Uno o más libros no tienen ejemplares disponibles en la biblioteca central."
             prefijo = f"ENV-{date.today():%Y%m%d}-"
             ultimo = session.scalar(select(Package.codigo_envio).where(Package.codigo_envio.like(f"{prefijo}%")).order_by(Package.codigo_envio.desc()).limit(1))
             secuencia = int(ultimo.rsplit("-", 1)[1]) + 1 if ultimo else 1
@@ -41,19 +70,18 @@ class DistribucionController:
             )
             session.add(paquete)
             for libro in libros:
-                stock_central = session.scalar(select(BookStock).where(BookStock.libro_id == libro.id, BookStock.biblioteca_id == central.id)) if central else None
+                stock_central = existencias_centrales[libro.id]
                 stock_destino = session.scalar(select(BookStock).where(BookStock.libro_id == libro.id, BookStock.biblioteca_id == destino.id))
-                cantidad_envio = max(1, min(libro.cantidad or 1, 1))
-                if stock_central is not None:
-                    stock_central.cantidad = max(0, stock_central.cantidad - cantidad_envio)
-                    stock_central.actualizado_en = datetime.now()
+                cantidad_envio = 1
+                stock_central.cantidad -= cantidad_envio
+                stock_central.actualizado_en = datetime.now()
                 if stock_destino is None:
                     session.add(BookStock(libro_id=libro.id, biblioteca_id=destino.id, cantidad=cantidad_envio, actualizado_en=datetime.now()))
                 else:
                     stock_destino.cantidad += cantidad_envio
                     stock_destino.actualizado_en = datetime.now()
-                libro.cantidad = max(0, (libro.cantidad or 1) - cantidad_envio)
-                libro.estado = "distribuido"
+                if stock_central.cantidad == 0:
+                    libro.estado = "distribuido"
                 session.add(Location(libro_id=libro.id, biblioteca_id=destino.id, tipo_ubicacion="biblioteca_distribucion"))
                 session.add(Movement(
                     libro_id=libro.id, tipo_movimiento="distribucion",
