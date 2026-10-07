@@ -31,6 +31,8 @@ class RecepcionView(QWidget):
             form.addRow(labels[key], field)
             self.labels_procedencia[key] = form.labelForField(field)
         self.procedencia.currentIndexChanged.connect(self._actualizar_campos_procedencia)
+        self.fields["isbn"].textChanged.connect(self._autocompletar_con_registro_existente)
+        self.fields["titulo"].textChanged.connect(self._autocompletar_con_registro_existente)
         self._actualizar_campos_procedencia()
         layout.addLayout(form)
 
@@ -111,6 +113,25 @@ class RecepcionView(QWidget):
             etiqueta = self.labels_procedencia.get(nombre)
             if etiqueta:
                 etiqueta.setVisible(visible)
+
+    def _autocompletar_con_registro_existente(self, *_args) -> None:
+        if self.libro_id is not None:
+            return
+        titulo = self.fields["titulo"].text().strip()
+        isbn = self.fields["isbn"].text().strip()
+        autor = self.fields["autor"].text().strip()
+        if not (titulo or isbn or autor):
+            return
+        sugerencia = self.controller.sugerir_datos_automaticos(titulo, autor, isbn)
+        if not sugerencia:
+            return
+        for clave, valor in sugerencia.items():
+            if clave not in self.fields:
+                continue
+            if self.fields[clave].text().strip():
+                continue
+            if valor not in (None, ""):
+                self.fields[clave].setText(str(valor))
 
     def seleccionar(self) -> None:
         fila = self.tabla.currentRow()

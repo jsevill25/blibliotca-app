@@ -8,8 +8,47 @@ from database.models import Book, Cataloging, Library, Location, Movement
 
 
 class CatalogacionController:
+    MAPEO_GENERO_DEWEY = {
+        "novela": "863",
+        "poesia": "861",
+        "poesía": "861",
+        "teatro": "862",
+        "ensayo": "808",
+        "biografia individual": "920",
+        "biografia colectiva": "920",
+        "matematica": "510",
+        "matematicas": "510",
+        "matematica aplicada": "510",
+        "tecnologia": "600",
+        "tecnología": "600",
+        "ciencias": "500",
+        "historia": "900",
+        "literatura": "800",
+        "no ficcion": "000",
+        "no ficción": "000",
+    }
+
     def __init__(self, database: DatabaseManager):
         self.database = database
+
+    def sugerir_datos_por_genero(self, genero: str) -> dict:
+        codigo = self.sugerir_codigo_dewey_por_genero(genero)
+        seccion = "General"
+        material = "Otro"
+        if codigo in {"863", "861", "862", "808"}:
+            seccion = "General"
+            material = "Otro"
+        elif codigo == "510":
+            seccion = "General"
+            material = "Otro"
+        elif codigo == "600":
+            seccion = "General"
+            material = "Otro"
+        return {"codigo": codigo, "seccion": seccion, "material": material}
+
+    def sugerir_codigo_dewey_por_genero(self, genero: str) -> str:
+        clave = self._normalizar(genero)
+        return self.MAPEO_GENERO_DEWEY.get(clave, "")
 
     def sugerir_cutter(self, autor: str) -> str:
         apellido = (autor.strip().split()[-1] if autor.strip() else "X")

@@ -14,6 +14,37 @@ class RecepcionController:
     def __init__(self, database: DatabaseManager):
         self.database = database
 
+    def sugerir_datos_automaticos(self, titulo: str = "", autor: str = "", isbn: str = "") -> dict:
+        with self.database.session() as session:
+            if not titulo.strip() and not isbn.strip() and not autor.strip():
+                return {}
+            criterios = []
+            valor_titulo = titulo.strip()
+            valor_isbn = isbn.strip()
+            valor_autor = autor.strip()
+            if valor_isbn:
+                criterios.append(Book.isbn == valor_isbn)
+            if valor_titulo:
+                criterios.append(Book.titulo.ilike(f"%{valor_titulo}%"))
+            if valor_autor:
+                criterios.append(Book.autor.ilike(f"%{valor_autor}%"))
+            if not criterios:
+                return {}
+            libro = session.scalar(select(Book).where(*criterios).order_by(Book.fecha_ingreso.desc(), Book.id.desc()).limit(1))
+            if libro is None:
+                return {}
+            return {
+                "titulo": libro.titulo,
+                "autor": libro.autor,
+                "editorial": libro.editorial,
+                "anio": libro.anio or "",
+                "idioma": libro.idioma,
+                "procedencia": libro.procedencia,
+                "procedencia_detalle": libro.procedencia_detalle,
+                "observaciones": libro.observaciones,
+                "isbn": libro.isbn,
+            }
+
     def registrar(self, datos: dict, usuario_id: int | None) -> tuple[bool, str]:
         titulo = str(datos.get("titulo", "")).strip()
         procedencia = str(datos.get("procedencia", "")).strip()

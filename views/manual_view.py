@@ -89,8 +89,8 @@ class ManualView(QWidget):
         ])
         self._agregar_tema("Catalogación", [
             "1. Busque y seleccione un libro recibido en la lista de pendientes.",
-            "2. Elija Dewey o LC, escriba el código real de clasificación y revise el Cutter sugerido.",
-            "3. La cota se forma con clasificación, Cutter y año. Puede corregir el texto antes de catalogar.",
+            "2. Elija Dewey o LC. Si trabaja en Dewey y selecciona el género del libro (por ejemplo Novela, Matemática o Tecnología), el sistema rellena automáticamente el código Dewey sugerido para acelerar el proceso.",
+            "3. Revise el Cutter sugerido y ajuste la cota si requiere una clasificación institucional. La cota se forma con clasificación, Cutter y año.",
             "4. Si la cota ya existe, confirme sólo cuando sea un volumen que deba compartirla. Al guardar, el estado pasa a catalogado.",
         ])
         self._agregar_tema("Etiquetas y fichas", [

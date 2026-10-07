@@ -51,6 +51,43 @@ class DistribucionController:
             codigo = paquete.codigo_envio
         return True, codigo
 
+    def sugerir_genero_para_envio(self, libro_ids: list[int]) -> str:
+        if not libro_ids:
+            return ""
+        with self.database.session() as session:
+            libros = list(session.scalars(select(Book).where(Book.id.in_(libro_ids), Book.activo.is_(True))))
+        if not libros:
+            return ""
+        conteos = {
+            "Novela": 0, "Poesía": 0, "Teatro": 0, "Ensayo": 0,
+            "Matemática": 0, "Tecnología": 0, "Historia": 0, "No ficción": 0,
+        }
+        for libro in libros:
+            codigo = str(libro.codigo_dewey or "").strip()
+            if codigo.startswith("861"):
+                conteos["Poesía"] += 1
+            elif codigo.startswith("862"):
+                conteos["Teatro"] += 1
+            elif codigo.startswith("863"):
+                conteos["Novela"] += 1
+            elif codigo.startswith("81"):
+                conteos["Poesía"] += 1
+            elif codigo.startswith("82"):
+                conteos["Teatro"] += 1
+            elif codigo.startswith("80"):
+                conteos["Ensayo"] += 1
+            elif codigo.startswith("51"):
+                conteos["Matemática"] += 1
+            elif codigo.startswith("60"):
+                conteos["Tecnología"] += 1
+            elif codigo.startswith("9"):
+                conteos["Historia"] += 1
+            else:
+                conteos["No ficción"] += 1
+        if not any(conteos.values()):
+            return ""
+        return max(conteos, key=conteos.get)
+
     def listar_bibliotecas(self) -> list[Library]:
         with self.database.session() as session:
             return list(session.scalars(select(Library).where(Library.activa.is_(True)).order_by(Library.nombre)))

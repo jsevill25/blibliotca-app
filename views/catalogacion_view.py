@@ -29,6 +29,7 @@ class CatalogacionView(QWidget):
         form = QFormLayout()
         self.clasificacion = QComboBox()
         self.clasificacion.addItems(["Dewey", "LC"])
+        self.clasificacion.currentTextChanged.connect(self._sincronizar_codigo_por_genero)
         self.modo_cota = QComboBox()
         self.modo_cota.addItems(["Manual", "Automática"])
         self.codigo = QLineEdit()
@@ -36,7 +37,11 @@ class CatalogacionView(QWidget):
         self.cota = QTextEdit()
         self.cota.setMaximumHeight(110)
         self.genero = QComboBox()
-        self.genero.addItems(["No ficción", "Biografía individual", "Biografía colectiva", "Novela", "Poesía", "Teatro", "Ensayo"])
+        self.genero.addItems([
+            "No ficción", "Biografía individual", "Biografía colectiva",
+            "Novela", "Poesía", "Teatro", "Ensayo", "Matemática", "Tecnología",
+        ])
+        self.genero.currentTextChanged.connect(self._sincronizar_codigo_por_genero)
         self.numero_autores = QLineEdit()
         self.seccion = QComboBox()
         self.seccion.addItems(["General", "Referencia", "Infantil", "Juvenil"])
@@ -101,6 +106,8 @@ class CatalogacionView(QWidget):
             self.codigo.clear()
             self.genero.setCurrentIndex(0)
             self.seccion.setCurrentIndex(0)
+            self.material.setCurrentIndex(0)
+            self._sincronizar_codigo_por_genero()
             self.numero_autores.clear()
             self.nacionalidad.clear()
             self.material.setCurrentIndex(0)
@@ -126,6 +133,19 @@ class CatalogacionView(QWidget):
             self.cutter.setText(self.controller.sugerir_cutter(libro.autor))
             self._refrescar_cota()
 
+    def _sincronizar_codigo_por_genero(self, *_args) -> None:
+        if self.clasificacion.currentText() != "Dewey":
+            return
+        sugerencia = self.controller.sugerir_datos_por_genero(self.genero.currentText())
+        if sugerencia["codigo"]:
+            self.codigo.setText(sugerencia["codigo"])
+        elif not self.codigo.text().strip():
+            self.codigo.clear()
+        if sugerencia["seccion"] and self.seccion.currentText() == "General":
+            self.seccion.setCurrentText(sugerencia["seccion"])
+        if sugerencia["material"] and self.material.currentText() == "Otro":
+            self.material.setCurrentText(sugerencia["material"])
+
     def _refrescar_cota(self, *_args) -> None:
         if self.modo_cota.currentText() == "Manual":
             self.actualizar_cota(self.anio_actual)
@@ -139,6 +159,10 @@ class CatalogacionView(QWidget):
             QMessageBox.warning(self, "Catalogación", "Seleccione un libro pendiente.")
             return
         try:
+            if self.clasificacion.currentText() == "Dewey":
+                sugerido = self.controller.sugerir_codigo_dewey_por_genero(self.genero.currentText())
+                if sugerido and not self.codigo.text().strip():
+                    self.codigo.setText(sugerido)
             resultado = self.controller.generar_cota_automatica(self.libro_id, self.codigo.text(), {
                 "genero": self.genero.currentText(), "seccion": self.seccion.currentText(),
                 "numero_autores": self.numero_autores.text(),

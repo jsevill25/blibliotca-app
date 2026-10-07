@@ -178,6 +178,26 @@ def test_flujo_recepcion_catalogacion_distribucion_y_historial(tmp_path):
     database.close()
 
 
+def test_catalogacion_asigna_codigo_dewey_por_genero_y_cataloga_correctamente(tmp_path):
+    database = DatabaseManager(tmp_path / "catalogacion-genero.db")
+    database.initialize()
+    with database.session() as session:
+        libro = Book(
+            titulo="Ecuaciones del espacio", autor="A. Matemático", anio=2024, paginas=210,
+            procedencia="compra", estado="recibido", numero_registro="REG-2026-10005",
+        )
+        session.add(libro)
+        session.flush()
+        libro_id = libro.id
+
+    catalogacion = CatalogacionController(database)
+    assert catalogacion.sugerir_codigo_dewey_por_genero("Novela") == "863"
+    assert catalogacion.sugerir_codigo_dewey_por_genero("Matemática") == "510"
+    assert catalogacion.sugerir_codigo_dewey_por_genero("Tecnología") == "600"
+    ok, mensaje = catalogacion.catalogar(libro_id, "Dewey", "510", "M123", "510\nM123\n2024", None)
+    assert ok is True, mensaje
+
+
 def test_generacion_cota_automatica_aplica_reglas_y_numera_duplicados(tmp_path):
     database = DatabaseManager(tmp_path / "cotas.db")
     database.initialize()
@@ -330,4 +350,34 @@ def test_bibliotecas_reales_y_cotas_quedan_trasladas_sin_perder_historial(tmp_pa
     assert resultados[0]["libro"].cota == "300\nA123\n2024"
     assert any(mov.tipo_movimiento == "distribucion" for mov in ubicacion.historial(resultados[0]["libro"].id))
 
+    database.close()
+
+
+def test_automatizaciones_de_recepcion_y_distribucion_sugieren_datos_y_genero(tmp_path):
+    database = DatabaseManager(tmp_path / "automatizaciones.db")
+    database.initialize()
+
+    with database.session() as session:
+        session.add(Book(
+            titulo="Matemáticas avanzadas", autor="Ana Torres", editorial="Ediciones Alfa",
+            anio=2024, isbn="978-1234567890", edicion="1ra", idioma="Español",
+            procedencia="compra", estado="catalogado", codigo_dewey="510",
+            cota="510\nT123\n2024", numero_registro="REG-2026-92001",
+        ))
+        session.add(Book(
+            titulo="Teoría del teatro", autor="Luis Bello", editorial="Editorial Beta",
+            anio=2023, isbn="978-9999999999", edicion="2da", idioma="Español",
+            procedencia="donacion", estado="catalogado", codigo_dewey="862",
+            cota="862\nB123\n2023", numero_registro="REG-2026-92002",
+        ))
+        session.flush()
+
+    recepcion = RecepcionController(database)
+    sugerencia = recepcion.sugerir_datos_automaticos(titulo="Matemáticas avanzadas")
+    assert sugerencia["autor"] == "Ana Torres"
+    assert sugerencia["editorial"] == "Ediciones Alfa"
+
+    distribucion = DistribucionController(database)
+    sugerencia_genero = distribucion.sugerir_genero_para_envio([1, 2])
+    assert sugerencia_genero in {"Matemática", "Teatro"}
     database.close()

@@ -92,6 +92,10 @@ class DistribucionView(QWidget):
             QMessageBox.warning(self, "Distribución", "Seleccione la sucursal y uno o más libros.")
             return
         ids = [int(self.tabla.item(row, 0).text()) for row in filas]
+        if not self.genero.text().strip():
+            sugerencia = self.controller.sugerir_genero_para_envio(ids)
+            if sugerencia:
+                self.genero.setText(sugerencia)
         exito, mensaje = self.controller.crear_bulto(self.destino.currentData(), ids, self.usuario_id, self.genero.text(), self.observaciones.toPlainText())
         if not exito:
             QMessageBox.warning(self, "Distribución", mensaje)

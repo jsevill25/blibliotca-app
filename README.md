@@ -28,7 +28,7 @@ La primera ejecución crea `data/biblioteca_central.db`, las tablas necesarias (
 ## Módulos
 
 - Recepción: alta, búsqueda por texto/procedencia/fecha y corrección auditada de ingresos con número `REG-AAAA-NNNNN`; precio unitario y número de volúmenes son opcionales.
-- Catalogación: pendientes, sugerencia Cutter, clasificación Dewey/LC persistida y asignación de cota con advertencia de duplicados.
+- Catalogación: pendientes, sugerencia Cutter, clasificación Dewey/LC persistida, asignación automática de código Dewey por género y asignación de cota con advertencia de duplicados.
 - Fichero: búsqueda e inventario catalogado; genera la Matriz de Control por Sucursales para un libro. Las marcas I (ingreso), D (disponibilidad) y P (préstamo) se calculan según el estado y la ubicación más recientes.
 - Distribución: envíos `ENV-AAAAMMDD-NNN` sólo con libros catalogados; registra ubicación y movimientos, genera/consulta el Control de Envío institucional, la Nota de Entrega y la mini-ficha PDF. La nota prellena sucursal, municipio, volumen y fecha y solicita verificar el nombre y la cédula de quien recibe.
 - Ubicación: búsqueda global, filtros por estado/biblioteca/sala, última ubicación, último movimiento e historial.
