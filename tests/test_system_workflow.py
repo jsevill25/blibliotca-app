@@ -1,7 +1,7 @@
 from datetime import date
 
 from database.db_manager import DatabaseManager
-from database.models import Book, Cataloging, Library
+from database.models import Book, Cataloging, Library, Location, Movement
 from controllers.auth_controller import AuthController
 from controllers.catalogacion_controller import CatalogacionController
 from controllers.distribucion_controller import DistribucionController
@@ -282,4 +282,52 @@ def test_fichero_busca_cedulas_y_resume_existencias_por_area_y_sistema(tmp_path)
     }
     assert resumen[("Lengua y literatura", "LC")]["total"] == 1
     assert resumen[("Sin clasificar", "Sin clasificar")]["pendientes"] == 1
+    database.close()
+
+
+def test_bibliotecas_reales_y_cotas_quedan_trasladas_sin_perder_historial(tmp_path):
+    database = DatabaseManager(tmp_path / "multisucursal.db")
+    database.initialize()
+    libro_id = None
+
+    with database.session() as session:
+        central = session.query(Library).filter_by(nombre="Biblioteca Central Rómulo Gallegos").one()
+        norte = Library(nombre="Sucursal Norte", direccion="Av. Norte 10", municipio="Municipio Norte", encargado="Ana", activa=True)
+        sur = Library(nombre="Sede Sur Regional", direccion="Av. Sur 12", municipio="Municipio Sur", encargado="Luis", activa=True)
+        session.add_all([norte, sur])
+        session.flush()
+
+        libro = Book(
+            titulo="Libro de sucursales", autor="Autor de prueba",
+            procedencia="compra", estado="catalogado", codigo_dewey="300",
+            cota="300\nA123\n2024", numero_registro="REG-2026-90001",
+            numero_volumenes=2,
+        )
+        session.add(libro)
+        session.flush()
+        libro_id = libro.id
+
+        session.add(Cataloging(
+            libro_id=libro.id, clasificacion="Dewey", codigo_clasificacion="300",
+            cota_completa=libro.cota, cutter="A123",
+        ))
+        session.add_all([
+            Location(libro_id=libro.id, biblioteca_id=central.id, tipo_ubicacion="sala", sala="Catalogación"),
+            Location(libro_id=libro.id, biblioteca_id=norte.id, tipo_ubicacion="biblioteca_distribucion"),
+            Movement(libro_id=libro.id, tipo_movimiento="distribucion", origen=central.nombre, destino=norte.nombre, detalle="Envío Norte"),
+        ])
+        session.flush()
+
+    fichero = FicheroController(database)
+    matriz = fichero.obtener_matriz_sucursales(libro_id=libro_id)
+    nombres = {fila["biblioteca"] for fila in matriz["filas"]}
+    assert {"Rómulo Gallegos", "Sucursal Norte", "Sede Sur Regional"}.issubset(nombres)
+
+    ubicacion = UbicacionController(database)
+    resultados = ubicacion.buscar(texto="REG-2026-90001")
+    assert resultados
+    assert resultados[0]["biblioteca"] == "Sucursal Norte"
+    assert resultados[0]["libro"].cota == "300\nA123\n2024"
+    assert any(mov.tipo_movimiento == "distribucion" for mov in ubicacion.historial(resultados[0]["libro"].id))
+
     database.close()

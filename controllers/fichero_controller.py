@@ -97,6 +97,41 @@ class FicheroController:
             for (area, sistema), cantidades in sorted(resumen.items())
         ]
 
+    @staticmethod
+    def normalizar_nombre(nombre: str) -> str:
+        sin_acentos = unicodedata.normalize("NFKD", nombre)
+        texto = "".join(caracter for caracter in sin_acentos if not unicodedata.combining(caracter)).casefold()
+        if texto.strip().startswith("bic. nat. del libertador"):
+            texto = texto.replace("bic. nat. del libertador", "biblioteca nacional del libertador", 1)
+        return " ".join("".join(caracter if caracter.isalnum() else " " for caracter in texto).split())
+
+    @classmethod
+    def bibliotecas_para_matriz(cls, bibliotecas: list[Library]) -> list[str]:
+        nombres = list(cls.BIBLIOTECAS_MATRIZ)
+        extras = sorted(
+            {
+                biblioteca.nombre for biblioteca in bibliotecas
+                if not any(
+                    cls._coincide(nombre, biblioteca.nombre)
+                    for nombre in cls.BIBLIOTECAS_MATRIZ
+                )
+            },
+            key=str.casefold,
+        )
+        nombres.extend(extras)
+        return nombres
+
+    @classmethod
+    def _coincide(cls, nombre_oficial: str, nombre_registrado: str) -> bool:
+        buscado = cls.normalizar_nombre(nombre_oficial).split()
+        registrado = cls.normalizar_nombre(nombre_registrado).split()
+        if not buscado or len(buscado) > len(registrado):
+            return False
+        return any(
+            all(registrado[inicio + indice].startswith(token) for indice, token in enumerate(buscado))
+            for inicio in range(len(registrado) - len(buscado) + 1)
+        )
+
     def obtener_matriz_sucursales(self, libro_id: int) -> dict | None:
         with self.database.session() as session:
             libro = session.get(Book, libro_id)
@@ -115,46 +150,16 @@ class FicheroController:
                 .where(Location.id == ultima_ubicacion_id)
             )
             bibliotecas = list(session.scalars(select(Library).order_by(Library.nombre)))
-
-            def normalizar(nombre: str) -> str:
-                sin_acentos = unicodedata.normalize("NFKD", nombre)
-                texto = "".join(caracter for caracter in sin_acentos if not unicodedata.combining(caracter)).casefold()
-                if texto.strip().startswith("bic. nat. del libertador"):
-                    texto = texto.replace("bic. nat. del libertador", "biblioteca nacional del libertador", 1)
-                return " ".join("".join(caracter if caracter.isalnum() else " " for caracter in texto).split())
-
-            def coincide(nombre_oficial: str, nombre_registrado: str) -> bool:
-                buscado = normalizar(nombre_oficial).split()
-                registrado = normalizar(nombre_registrado).split()
-                if not buscado or len(buscado) > len(registrado):
-                    return False
-                return any(
-                    all(registrado[inicio + indice].startswith(token) for indice, token in enumerate(buscado))
-                    for inicio in range(len(registrado) - len(buscado) + 1)
-                )
-
-            nombres = list(self.BIBLIOTECAS_MATRIZ)
-            nombres.extend(
-                sorted(
-                    (
-                        biblioteca.nombre for biblioteca in bibliotecas
-                        if not any(
-                            coincide(nombre, biblioteca.nombre)
-                            for nombre in self.BIBLIOTECAS_MATRIZ
-                        )
-                    ),
-                    key=str.casefold,
-                )
-            )
+            nombres = self.bibliotecas_para_matriz(bibliotecas)
             filas = []
             for nombre in nombres:
                 coincidencias = [
                     registro for registro in bibliotecas
-                    if coincide(nombre, registro.nombre)
+                    if self._coincide(nombre, registro.nombre)
                 ]
                 biblioteca = next(
                     (registro for registro in coincidencias if ubicacion and registro.id == ubicacion.biblioteca_id),
-                    next((registro for registro in coincidencias if normalizar(registro.nombre) == normalizar(nombre)), None),
+                    next((registro for registro in coincidencias if self.normalizar_nombre(registro.nombre) == self.normalizar_nombre(nombre)), None),
                 )
                 registrada = bool(
                     libro.activo

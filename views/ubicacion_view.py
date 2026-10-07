@@ -63,8 +63,8 @@ class UbicacionView(QWidget):
         asignar = QPushButton("Actualizar ubicación del libro seleccionado")
         asignar.clicked.connect(self.actualizar_ubicacion)
         layout.addWidget(asignar)
-        self.tabla = QTableWidget(0, 9)
-        self.tabla.setHorizontalHeaderLabels(["ID", "Registro", "Título", "Autor", "Estado", "Biblioteca", "Sala", "Estante", "Último movimiento"])
+        self.tabla = QTableWidget(0, 10)
+        self.tabla.setHorizontalHeaderLabels(["ID", "Registro", "Título", "Autor", "Cota", "Estado", "Biblioteca", "Sala", "Estante", "Último movimiento"])
         self.tabla.setColumnHidden(0, True)
         self.tabla.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.tabla.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -84,7 +84,11 @@ class UbicacionView(QWidget):
             libro = info["libro"]
             movimiento = info["ultimo_movimiento"]
             ultimo = f"{movimiento.fecha:%Y-%m-%d} {movimiento.tipo_movimiento}" if movimiento else "Sin movimientos"
-            valores = (str(libro.id), libro.numero_registro, libro.titulo, libro.autor, libro.estado, info["biblioteca"], info["sala"], info["estante"], ultimo)
+            valores = (
+                str(libro.id), libro.numero_registro, libro.titulo, libro.autor,
+                libro.cota or "", libro.estado, info["biblioteca"], info["sala"],
+                info["estante"], ultimo,
+            )
             for column, valor in enumerate(valores):
                 self.tabla.setItem(row, column, QTableWidgetItem(str(valor or "")))
         self.tabla.resizeColumnsToContents()
