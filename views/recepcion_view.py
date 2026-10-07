@@ -18,14 +18,15 @@ class RecepcionView(QWidget):
         layout.addWidget(titulo)
 
         form = QFormLayout()
-        self.fields = {name: QLineEdit() for name in ("titulo", "autor", "isbn", "editorial", "anio", "edicion", "paginas", "numero_volumenes", "precio_unitario", "idioma", "procedencia_detalle", "donante_nombre", "proveedor_nombre", "institucion_origen", "observaciones")}
+        self.fields = {name: QLineEdit() for name in ("titulo", "autor", "isbn", "editorial", "anio", "edicion", "paginas", "cantidad", "numero_volumenes", "precio_unitario", "idioma", "procedencia_detalle", "donante_nombre", "proveedor_nombre", "institucion_origen", "observaciones")}
         self.fields["titulo"].setPlaceholderText("Título del libro")
+        self.fields["cantidad"].setText("1")
         self.procedencia = QComboBox()
         self.procedencia.addItem("Donación", "donacion")
         self.procedencia.addItem("Compra", "compra")
         self.procedencia.addItem("Biblioteca Nacional", "biblioteca_nacional")
         form.addRow("Procedencia", self.procedencia)
-        labels = {"titulo": "Título *", "autor": "Autor", "isbn": "ISBN", "editorial": "Editorial", "anio": "Año", "edicion": "Edición", "paginas": "Páginas", "numero_volumenes": "N° de volúmenes (opcional)", "precio_unitario": "Precio unitario (Bs., opcional)", "idioma": "Idioma", "procedencia_detalle": "Detalle de procedencia", "donante_nombre": "Donante", "proveedor_nombre": "Proveedor", "institucion_origen": "Institución de origen", "observaciones": "Observaciones"}
+        labels = {"titulo": "Título *", "autor": "Autor", "isbn": "ISBN", "editorial": "Editorial", "anio": "Año", "edicion": "Edición", "paginas": "Páginas", "cantidad": "Cantidad recibida *", "numero_volumenes": "N° de volúmenes (opcional)", "precio_unitario": "Precio unitario (Bs., opcional)", "idioma": "Idioma", "procedencia_detalle": "Detalle de procedencia", "donante_nombre": "Donante", "proveedor_nombre": "Proveedor", "institucion_origen": "Institución de origen", "observaciones": "Observaciones"}
         self.labels_procedencia = {}
         for key, field in self.fields.items():
             form.addRow(labels[key], field)
@@ -144,8 +145,8 @@ class RecepcionView(QWidget):
         self.procedencia.setCurrentIndex(max(0, self.procedencia.findData(libro.procedencia)))
         valores = {
             "titulo": libro.titulo, "autor": libro.autor, "isbn": libro.isbn, "editorial": libro.editorial,
-            "anio": libro.anio or "", "edicion": libro.edicion, "paginas": libro.paginas or "", "idioma": libro.idioma,
-            "numero_volumenes": libro.numero_volumenes if libro.numero_volumenes is not None else "",
+            "anio": libro.anio or "", "edicion": libro.edicion, "paginas": libro.paginas or "", "cantidad": libro.cantidad,
+            "idioma": libro.idioma, "numero_volumenes": libro.numero_volumenes if libro.numero_volumenes is not None else "",
             "precio_unitario": libro.precio_unitario if libro.precio_unitario is not None else "",
             "procedencia_detalle": libro.procedencia_detalle, "observaciones": libro.observaciones,
         }

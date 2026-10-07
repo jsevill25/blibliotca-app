@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import joinedload, selectinload
 
 from database.db_manager import DatabaseManager
-from database.models import Book, Library, Location, Movement, Package
+from database.models import Book, BookStock, Library, Location, Movement, Package
 
 
 class DistribucionController:
@@ -41,12 +41,24 @@ class DistribucionController:
             )
             session.add(paquete)
             for libro in libros:
+                stock_central = session.scalar(select(BookStock).where(BookStock.libro_id == libro.id, BookStock.biblioteca_id == central.id)) if central else None
+                stock_destino = session.scalar(select(BookStock).where(BookStock.libro_id == libro.id, BookStock.biblioteca_id == destino.id))
+                cantidad_envio = max(1, min(libro.cantidad or 1, 1))
+                if stock_central is not None:
+                    stock_central.cantidad = max(0, stock_central.cantidad - cantidad_envio)
+                    stock_central.actualizado_en = datetime.now()
+                if stock_destino is None:
+                    session.add(BookStock(libro_id=libro.id, biblioteca_id=destino.id, cantidad=cantidad_envio, actualizado_en=datetime.now()))
+                else:
+                    stock_destino.cantidad += cantidad_envio
+                    stock_destino.actualizado_en = datetime.now()
+                libro.cantidad = max(0, (libro.cantidad or 1) - cantidad_envio)
                 libro.estado = "distribuido"
                 session.add(Location(libro_id=libro.id, biblioteca_id=destino.id, tipo_ubicacion="biblioteca_distribucion"))
                 session.add(Movement(
                     libro_id=libro.id, tipo_movimiento="distribucion",
                     origen=central.nombre if central else "Biblioteca Central", destino=destino.nombre,
-                    usuario_id=usuario_id, detalle=f"Envío {paquete.codigo_envio}",
+                    usuario_id=usuario_id, detalle=f"Envío {paquete.codigo_envio}: cantidad {cantidad_envio}",
                 ))
             codigo = paquete.codigo_envio
         return True, codigo

@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer, Numeric, String, Table, Text, Column
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer, Numeric, String, Table, Text, Column, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -46,6 +46,7 @@ class Book(Base):
     idioma: Mapped[str] = mapped_column(String(80), default="Español")
     paginas: Mapped[int | None] = mapped_column(Integer)
     numero_volumenes: Mapped[int | None] = mapped_column(Integer)
+    cantidad: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     precio_unitario: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     procedencia: Mapped[str] = mapped_column(String(40), nullable=False)
     procedencia_detalle: Mapped[str] = mapped_column(String(240), default="")
@@ -147,6 +148,21 @@ class Package(Base):
 
     biblioteca_destino: Mapped[Library] = relationship()
     libros: Mapped[list[Book]] = relationship(secondary=package_books, back_populates="bultos")
+
+
+class BookStock(Base):
+    __tablename__ = "stock_libros"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    libro_id: Mapped[int] = mapped_column(ForeignKey("libros.id", ondelete="CASCADE"), index=True)
+    biblioteca_id: Mapped[int] = mapped_column(ForeignKey("bibliotecas.id", ondelete="CASCADE"), index=True)
+    cantidad: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    actualizado_en: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, nullable=False)
+
+    libro: Mapped[Book] = relationship()
+    biblioteca: Mapped[Library] = relationship()
+
+    __table_args__ = (UniqueConstraint("libro_id", "biblioteca_id", name="uq_stock_libro_biblioteca"),)
 
 
 class Movement(Base):

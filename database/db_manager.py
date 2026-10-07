@@ -32,6 +32,8 @@ class DatabaseManager:
         with self.engine.begin() as connection:
             if "numero_volumenes" not in columnas_libros:
                 connection.execute(text("ALTER TABLE libros ADD COLUMN numero_volumenes INTEGER"))
+            if "cantidad" not in columnas_libros:
+                connection.execute(text("ALTER TABLE libros ADD COLUMN cantidad INTEGER NOT NULL DEFAULT 1"))
             if "precio_unitario" not in columnas_libros:
                 connection.execute(text("ALTER TABLE libros ADD COLUMN precio_unitario NUMERIC(12, 2)"))
             if "municipio" not in columnas_bibliotecas:
@@ -41,7 +43,7 @@ class DatabaseManager:
             with self.engine.begin() as connection:
                 connection.execute(text("ALTER TABLE catalogacion ADD COLUMN codigo_clasificacion VARCHAR(40) NOT NULL DEFAULT ''"))
         with self.session() as session:
-            seed_initial_data(session)
+            seed_initial_data(session, self.database_path)
 
     @contextmanager
     def session(self) -> Iterator[Session]:

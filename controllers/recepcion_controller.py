@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
 from database.db_manager import DatabaseManager
-from database.models import Book, Library, Location, Movement, Reception
+from database.models import Book, BookStock, Library, Location, Movement, Reception
 
 
 class RecepcionController:
@@ -54,15 +54,18 @@ class RecepcionController:
             anio = int(datos["anio"]) if datos.get("anio") not in (None, "") else None
             paginas = int(datos["paginas"]) if datos.get("paginas") not in (None, "") else None
             numero_volumenes = int(datos["numero_volumenes"]) if datos.get("numero_volumenes") not in (None, "") else None
+            cantidad = int(datos["cantidad"]) if datos.get("cantidad") not in (None, "") else 1
             precio_unitario = Decimal(str(datos["precio_unitario"]).strip().replace(",", ".")) if datos.get("precio_unitario") not in (None, "") else None
         except (TypeError, ValueError, InvalidOperation):
-            return False, "Año, páginas y volúmenes deben ser enteros; el precio debe ser numérico."
+            return False, "Año, páginas, cantidad y volúmenes deben ser enteros; el precio debe ser numérico."
         if anio is not None and not 0 < anio <= date.today().year + 1:
             return False, "El año de publicación no es válido."
         if paginas is not None and paginas <= 0:
             return False, "El número de páginas debe ser mayor que cero."
         if numero_volumenes is not None and numero_volumenes <= 0:
             return False, "El número de volúmenes debe ser mayor que cero."
+        if cantidad <= 0:
+            return False, "La cantidad recibida debe ser mayor que cero."
         if precio_unitario is not None and (not precio_unitario.is_finite() or precio_unitario < 0):
             return False, "El precio unitario debe ser un monto válido mayor o igual a cero."
 
@@ -78,7 +81,7 @@ class RecepcionController:
                 editorial=str(datos.get("editorial", "")).strip(), anio=anio,
                 isbn=str(datos.get("isbn", "")).strip(), edicion=str(datos.get("edicion", "")).strip(),
                 idioma=str(datos.get("idioma", "Español")).strip() or "Español", paginas=paginas,
-                numero_volumenes=numero_volumenes, precio_unitario=precio_unitario,
+                numero_volumenes=numero_volumenes, cantidad=cantidad, precio_unitario=precio_unitario,
                 procedencia=procedencia, procedencia_detalle=str(datos.get("procedencia_detalle", "")).strip(),
                 fecha_ingreso=date.today(), numero_registro=f"{prefijo}{secuencia:05d}",
                 observaciones=str(datos.get("observaciones", "")).strip(), estado="recibido",
@@ -93,7 +96,8 @@ class RecepcionController:
                 observaciones=libro.observaciones, registrado_por=usuario_id,
             ))
             session.add(Location(libro_id=libro.id, biblioteca_id=central.id, tipo_ubicacion="deposito", sala="Recepción"))
-            session.add(Movement(libro_id=libro.id, tipo_movimiento="recepcion", destino=central.nombre, usuario_id=usuario_id, detalle=f"Ingreso {libro.numero_registro}"))
+            session.add(BookStock(libro_id=libro.id, biblioteca_id=central.id, cantidad=cantidad, actualizado_en=datetime.now()))
+            session.add(Movement(libro_id=libro.id, tipo_movimiento="recepcion", destino=central.nombre, usuario_id=usuario_id, detalle=f"Ingreso {libro.numero_registro}: cantidad {cantidad}"))
             numero_registro = libro.numero_registro
         return True, numero_registro
 
@@ -127,20 +131,24 @@ class RecepcionController:
                 anio = int(datos["anio"]) if datos.get("anio") not in (None, "") else None
                 paginas = int(datos["paginas"]) if datos.get("paginas") not in (None, "") else None
                 numero_volumenes = int(datos["numero_volumenes"]) if datos.get("numero_volumenes") not in (None, "") else None
+                cantidad = int(datos["cantidad"]) if datos.get("cantidad") not in (None, "") else libro.cantidad
                 precio_unitario = Decimal(str(datos["precio_unitario"]).strip().replace(",", ".")) if datos.get("precio_unitario") not in (None, "") else None
             except (TypeError, ValueError, InvalidOperation):
-                return False, "Año, páginas y volúmenes deben ser enteros; el precio debe ser numérico."
+                return False, "Año, páginas, cantidad y volúmenes deben ser enteros; el precio debe ser numérico."
             if anio is not None and not 0 < anio <= date.today().year + 1:
                 return False, "El año de publicación no es válido."
             if paginas is not None and paginas <= 0:
                 return False, "El número de páginas debe ser mayor que cero."
             if numero_volumenes is not None and numero_volumenes <= 0:
                 return False, "El número de volúmenes debe ser mayor que cero."
+            if cantidad <= 0:
+                return False, "La cantidad recibida debe ser mayor que cero."
             if precio_unitario is not None and (not precio_unitario.is_finite() or precio_unitario < 0):
                 return False, "El precio unitario debe ser un monto válido mayor o igual a cero."
             libro.anio = anio
             libro.paginas = paginas
             libro.numero_volumenes = numero_volumenes
+            libro.cantidad = cantidad
             libro.precio_unitario = precio_unitario
             libro.procedencia = procedencia
             for campo in ("titulo", "autor", "editorial", "isbn", "edicion", "idioma", "procedencia_detalle", "observaciones"):
@@ -153,4 +161,12 @@ class RecepcionController:
             libro.recepcion.donante_nombre = str(datos.get("donante_nombre", "")).strip()
             libro.recepcion.proveedor_nombre = str(datos.get("proveedor_nombre", "")).strip()
             libro.recepcion.institucion_origen = str(datos.get("institucion_origen", "")).strip()
+            central = session.scalar(select(Library).where(Library.nombre == "Biblioteca Central Rómulo Gallegos"))
+            if central is not None:
+                stock_central = session.scalar(select(BookStock).where(BookStock.libro_id == libro.id, BookStock.biblioteca_id == central.id))
+                if stock_central is not None:
+                    stock_central.cantidad = libro.cantidad
+                    stock_central.actualizado_en = datetime.now()
+                else:
+                    session.add(BookStock(libro_id=libro.id, biblioteca_id=central.id, cantidad=libro.cantidad, actualizado_en=datetime.now()))
         return True, "Recepción actualizada."
